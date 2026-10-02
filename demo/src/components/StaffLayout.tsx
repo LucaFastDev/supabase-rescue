@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,9 +12,15 @@ const LINKS = [
 
 const StaffLayout = () => {
   const navigate = useNavigate();
+  const [signOutError, setSignOutError] = useState<string | null>(null);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    setSignOutError(null);
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      setSignOutError(`Could not sign out: ${error.message}`);
+      return;
+    }
     navigate("/login");
   };
 
@@ -39,6 +46,11 @@ const StaffLayout = () => {
             Sign out
           </Button>
         </div>
+        {signOutError && (
+          <p role="alert" className="mx-auto max-w-5xl px-4 pb-3 text-sm text-destructive">
+            {signOutError}
+          </p>
+        )}
       </header>
       <main className="mx-auto max-w-5xl px-4 py-8">
         <Outlet />
