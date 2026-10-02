@@ -2,6 +2,8 @@
 
 An audit tool for the security and production gaps typical of apps built with Lovable, Bolt or Cursor on Supabase, proven against a deliberately flawed sample booking app in `demo/`. The tool reads a client's repo (and, optionally, the live database's catalogs through a dedicated audit role), and writes a report of findings, each with a suggested fix and what to check before applying it. It never changes the audited repo or database. See [docs/PRD.md](docs/PRD.md) for the full plan.
 
+The case study for clients, the sample app before and after its fix, is in [case-study/README.md](case-study/README.md).
+
 Requires Node 22.18 or later and, for the demo stack, Docker. Run `npm install` first.
 
 ## Run the audit
@@ -41,7 +43,7 @@ The client runs it as `postgres` (running it twice is safe), then sets a passwor
 
 ## Start the demo stack
 
-The flawed sample app in `demo/`, its seeded flaws and how to run it are in [demo/README.md](demo/README.md); its before report is in `case-study/before/` and its after report, once fixed, in `case-study/after/`.
+The flawed sample app in `demo/`, its seeded flaws and how to run it are in [demo/README.md](demo/README.md); its before report is in `case-study/before/` and its after report, for the fixed app, in [case-study/after/report.md](case-study/after/report.md).
 
 The demo app's local Supabase stack runs on the default ports + 2000 (API on 56321, database on 56322, Studio on 56323), so it can run alongside other local stacks.
 
