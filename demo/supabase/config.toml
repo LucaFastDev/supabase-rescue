@@ -27,3 +27,8 @@ inspector_port = 10083
 [analytics]
 port = 56327
 vector_port = 56328
+
+[auth.email]
+# FLAW (check e): set off so staff accounts work without clicking a link, and left off, so anyone
+# can sign up with an address they do not own.
+enable_confirmations = false

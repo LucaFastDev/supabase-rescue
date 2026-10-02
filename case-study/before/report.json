@@ -1,0 +1,193 @@
+{
+  "tool": {
+    "name": "supabase-rescue",
+    "version": "0.1.0"
+  },
+  "target": "demo",
+  "findings": [
+    {
+      "check": "a",
+      "severity": "critical",
+      "title": "Table public.staff_notes has row level security off",
+      "location": {
+        "object": "public.staff_notes"
+      },
+      "why": "The public schema is exposed through the Data API, and this table has row level security off, so no per-row rule protects it. With Supabase's default grants, anyone who has your anon key, which ships inside your app to every visitor, can read, change and delete every row of it.",
+      "fix": {
+        "text": "Turn row level security on, together with the policies that allow exactly the access the app needs. To write them, answer one question for each kind of access (read, add, change, delete): who should be allowed, anyone, any signed-in user, or only the user a row belongs to?",
+        "snippet": {
+          "language": "sql",
+          "code": "alter table public.staff_notes enable row level security;\n\n-- Then one policy per kind of access. For example, signed-in users reading only their own\n-- rows (replace user_id with the column that holds the owner):\n-- create policy \"Users read their own rows\" on public.staff_notes\n--   for select to authenticated using ((select auth.uid()) = user_id);\n"
+        }
+      },
+      "checkBefore": "Enabling row level security with no policy blocks every read and write by anyone but the table's owner, so the parts of the app that use this table break until its policies exist. Write the policies first and apply them in the same migration as the alter table. Code running on a server with the service-role key is not affected."
+    },
+    {
+      "check": "b",
+      "severity": "critical",
+      "title": "Policy \"Anyone can book an appointment\" lets anyone add any row in public.appointments",
+      "location": {
+        "object": "public.appointments policy \"Anyone can book an appointment\""
+      },
+      "why": "The policy applies to anon for INSERT, and its condition is just `true`, so it allows every row: anyone who has your anon key, which ships inside your app to every visitor, can add any row in this table through the Data API.",
+      "fix": {
+        "text": "Replace `true` with a condition that says whose rows these are, and limit the policy to the roles that need it. The example limits it to signed-in users and the rows they own; replace user_id with the column that holds a row's owner.",
+        "snippet": {
+          "language": "sql",
+          "code": "alter policy \"Anyone can book an appointment\" on public.appointments\n  to authenticated\n  with check ((select auth.uid()) = user_id);\n"
+        }
+      },
+      "checkBefore": "Which parts of the app use this table, and as whom: after the change, anything that relied on the open policy, such as a sign-up or booking form for visitors, gets an error or no rows. Check the column you compare with auth.uid() exists and is filled on every row."
+    },
+    {
+      "check": "c",
+      "severity": "critical",
+      "title": "Function public.appointments_for_phone(text) runs with its owner's rights and anyone can call it",
+      "location": {
+        "object": "public.appointments_for_phone(text)"
+      },
+      "why": "1. It is SECURITY DEFINER, so it runs with the rights of its owner, usually postgres, which row level security does not stop, and anyone who has your anon key, which ships inside your app to every visitor, can call it through the Data API. Whatever it reads or changes, any visitor can. 2. It is SECURITY DEFINER and does not set its own search_path, so the names in its body are looked up in the caller's search path. A caller who can create objects in a schema on that path can make it run their own code with the owner's rights.",
+      "fix": {
+        "text": "It has 2 problems; the SQL fixes each, in the order above.",
+        "snippet": {
+          "language": "sql",
+          "code": "revoke execute on function public.appointments_for_phone(text) from anon, public;\ngrant execute on function public.appointments_for_phone(text) to authenticated; -- only if signed-in users need it\n\nalter function public.appointments_for_phone(text) set search_path = '';\n"
+        }
+      },
+      "checkBefore": "Whether the app calls this function before sign-in (supabase.rpc on a page for visitors): after the revoke those calls fail with permission denied. Revoking from public also removes signed-in users' access if it came only through public, so keep the grant to authenticated if they need it. With an empty search_path, every table, type and function the body uses must name its schema, such as public.bookings or auth.uid(). Check the body for unqualified names and run the function once after the change."
+    },
+    {
+      "check": "d",
+      "severity": "critical",
+      "title": "Supabase service-role key eyJhbG…81IU in code that ships to the browser",
+      "location": {
+        "file": "src/integrations/supabase/admin.ts",
+        "line": 7
+      },
+      "why": "src/integrations/supabase/admin.ts is frontend code, which ships to every visitor's browser, so anyone who opens the app can read this key. It bypasses every row level security policy: whoever holds it can read, change and delete every row in the database.",
+      "fix": {
+        "text": "Rotate the key first. In the Supabase dashboard, Project Settings, API Keys: move to the new publishable and secret keys and disable the legacy JWT-based keys, or roll the JWT secret (which replaces the anon key too). Then remove it from src/integrations/supabase/admin.ts and keep it only in server-side secrets (an edge function secret, or your host's environment variables), never in a variable the browser build reads. Deleting the line is not enough: the git history keeps the old key."
+      },
+      "checkBefore": "Every place that uses this key (servers, edge functions, CI, local env files), so you can give them the new one before the old one stops working."
+    },
+    {
+      "check": "e",
+      "severity": "medium",
+      "title": "Email confirmation is off in config.toml",
+      "location": {
+        "file": "supabase/config.toml",
+        "line": 34
+      },
+      "why": "enable_confirmations = false lets anyone sign up with an email address they do not own and use the account at once. This file configures the local stack and can be pushed to the live project with supabase config push, so it is often what production runs with too.",
+      "fix": {
+        "text": "Turn confirmations on, here and in the dashboard (see the manual check \"Confirm email is on\").",
+        "snippet": {
+          "language": "toml",
+          "code": "[auth.email]\nenable_confirmations = true\n"
+        }
+      },
+      "checkBefore": "That your sign-up flow tells users to check their inbox before signing in. Users who signed up while it was off stay confirmed."
+    },
+    {
+      "check": "f",
+      "severity": "low",
+      "title": "Migration drops a column",
+      "location": {
+        "file": "supabase/migrations/20260915110000_staff_notes.sql",
+        "line": 23
+      },
+      "why": "It drops a column. A version of the app that still reads that column, including tabs your users already have open, starts failing the moment it runs, and the data in the column is gone. The safe order is to ship a release that stops using the column, then drop it in a later migration. A migration that has been applied cannot be undone, so this is reported to catch the next one before it ships.",
+      "fix": {
+        "text": "Add a step to CI that fails a pull request whose new migrations are not backward-compatible. This one checks the migrations a pull request adds for the same patterns this check looks for, and fails too when it cannot check one.",
+        "snippet": {
+          "language": "yaml",
+          "code": "# .github/workflows/migration-check.yml\nname: migration-check\non:\n  pull_request:\n    paths: ['supabase/migrations/**']\njobs:\n  migrations:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          fetch-depth: 0\n      - name: New migrations are backward-compatible\n        shell: bash\n        run: |\n          list=$(mktemp)\n          if ! git diff -z --name-only --diff-filter=A \"origin/${{ github.base_ref }}...HEAD\" -- 'supabase/migrations/*.sql' > \"$list\"; then\n            echo \"::error::Could not list the migrations this pull request adds.\"\n            exit 1\n          fi\n          status=0\n          while IFS= read -r -d '' file; do\n            rc=0\n            perl -e '\n              my $file = shift;\n              open(my $fh, \"<\", $file) or exit 2;\n              my $hit = 0;\n              while (my $line = <$fh>) {\n                chomp $line;\n                if ($line =~ /\\bdrop\\s+(column|table)\\b|\\brename\\s+(column|to)\\b|\\bset\\s+not\\s+null\\b|\\balter\\s+column\\s+\\S+\\s+(set\\s+data\\s+)?type\\b|\\badd\\s+column\\b(?![^;,]*\\b(default|generated\\s+always)\\b)[^;,]*\\bnot\\s+null\\b|\\btruncate\\b/i) { print \"$file:$.:$line\\n\"; $hit = 1; }\n              }\n              close($fh) or exit 2;\n              exit $hit;\n            ' -- \"$file\" || rc=$?\n            if [ \"$rc\" -eq 1 ]; then\n              echo \"::error file=$file::$file is not backward-compatible: it drops, renames, retypes or truncates, or adds a required column without a default. Split it into backward-compatible steps.\"\n              status=1\n            elif [ \"$rc\" -ne 0 ]; then\n              echo \"::error file=$file::Could not check $file: perl exited $rc.\"\n              status=1\n            fi\n          done < \"$list\"\n          exit \"$status\"\n"
+        }
+      },
+      "checkBefore": "Whether this migration has already been applied to production. If it has, confirm the live app no longer depends on what it changed. If it has not, split it into backward-compatible steps before applying it."
+    },
+    {
+      "check": "e",
+      "kind": "review",
+      "title": "Route /reports renders data without an auth check",
+      "location": {
+        "file": "src/App.tsx",
+        "line": 29
+      },
+      "why": "The page at /reports (src/pages/Reports.tsx) reads from the database, and neither the route nor the page checks that the visitor is signed in. Whether that data reaches visitors who are not signed in depends on the tables' RLS policies, which a static read cannot see, and the page may be meant to be public.",
+      "fix": {
+        "text": "If the page is for signed-in users, wrap the route in a component that sends everyone else to the sign-in page, and make sure the RLS policies on the tables it reads allow only the users who should see the rows.",
+        "snippet": {
+          "language": "tsx",
+          "code": "function RequireAuth({ children }: { children: JSX.Element }) {\n  const [session, setSession] = useState<Session | null | undefined>(undefined);\n  useEffect(() => {\n    supabase.auth.getSession().then(({ data }) => setSession(data.session));\n  }, []);\n  if (session === undefined) return null;\n  return session ? children : <Navigate to=\"/login\" replace />;\n}\n\n<Route path=\"/reports\" element={<RequireAuth><Page /></RequireAuth>} />\n"
+        }
+      },
+      "checkBefore": "Whether this page is meant to be public. A route guard only hides the page: the data itself is protected by the RLS policies on the tables it reads, so check those too."
+    },
+    {
+      "check": "e",
+      "kind": "manual",
+      "title": "Leaked password protection is on",
+      "location": {
+        "object": "Supabase dashboard: Authentication > Attack Protection"
+      },
+      "why": "It refuses passwords known from public data breaches, which are the first ones attackers try. The tool cannot read the live project's auth settings without the Management API, which it never uses.",
+      "fix": {
+        "text": "In the Supabase dashboard, Authentication, Attack Protection: turn on leaked password protection."
+      },
+      "checkBefore": "That your sign-up and password-reset forms show the error the API returns when a password is refused."
+    },
+    {
+      "check": "e",
+      "kind": "manual",
+      "title": "Minimum password length is at least 8",
+      "location": {
+        "object": "Supabase dashboard: Authentication > Attack Protection"
+      },
+      "why": "Short passwords fall to guessing quickly. The tool cannot read the live project's auth settings without the Management API, which it never uses.",
+      "fix": {
+        "text": "In the Supabase dashboard, Authentication, Attack Protection: set the minimum password length to 8 or more."
+      },
+      "checkBefore": "That your sign-up form's own validation and message match the new minimum. Existing passwords keep working."
+    },
+    {
+      "check": "e",
+      "kind": "manual",
+      "title": "Confirm email is on",
+      "location": {
+        "object": "Supabase dashboard: Authentication > Sign In / Providers > Email"
+      },
+      "why": "Without email confirmation, anyone can sign up with an address they do not own, and the account works at once. The tool cannot read the live project's auth settings without the Management API, which it never uses.",
+      "fix": {
+        "text": "In the Supabase dashboard, Authentication, Sign In / Providers, Email: turn on Confirm email."
+      },
+      "checkBefore": "That your sign-up flow tells users to check their inbox, and that the link in the email goes to an allowed redirect URL."
+    },
+    {
+      "check": "e",
+      "kind": "manual",
+      "title": "Secure email change is on",
+      "location": {
+        "object": "Supabase dashboard: Authentication > Sign In / Providers > Email"
+      },
+      "why": "Without it, a new email address needs confirming only from the new address, so someone with brief access to a signed-in session can move the account to an inbox they control. The tool cannot read the live project's auth settings without the Management API, which it never uses.",
+      "fix": {
+        "text": "In the Supabase dashboard, Authentication, Sign In / Providers, Email: turn on Secure email change."
+      },
+      "checkBefore": "How users who can no longer reach their old inbox will change their address: they will need your support."
+    },
+    {
+      "check": "e",
+      "kind": "manual",
+      "title": "Site URL and redirect URLs list only the app's own domains",
+      "location": {
+        "object": "Supabase dashboard: Authentication > URL Configuration"
+      },
+      "why": "Sign-in links, password resets and OAuth sign-ins send users, with their session, to these URLs. A broad wildcard or a domain you do not control lets someone else receive a session. The tool cannot read the live project's auth settings without the Management API, which it never uses.",
+      "fix": {
+        "text": "In the Supabase dashboard, Authentication, URL Configuration: set Site URL to the app's production address, and list in Redirect URLs only the app's own domains (and localhost while developing), without broad wildcards."
+      },
+      "checkBefore": "Every redirectTo and emailRedirectTo your app passes, so each one is still on the list."
+    }
+  ]
+}

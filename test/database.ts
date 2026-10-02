@@ -44,6 +44,15 @@ export function randomName(prefix: string): string {
   return `${prefix}_${randomBytes(6).toString('hex')}`;
 }
 
+/**
+ * True when a finding's database object is one a test file made with randomName: anything in a
+ * fixture schema (test_<hex>), or a table in public named test_…_<hex>, as the audit role test
+ * creates. Test files run in parallel, so an audit of public can see another file's fixtures.
+ */
+export function isTestFixtureObject(object: string): boolean {
+  return /^(?:test_[0-9a-f]{12}\.|public\.test_[a-z_]+_[0-9a-f]{12}(?:$|[ (]))/.test(object);
+}
+
 export interface Fixture {
   url: string;
   /** The first schema, created by openFixture. */

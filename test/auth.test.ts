@@ -171,6 +171,44 @@ describe('check e: routes', () => {
     expect(reviews(await run(root))).toEqual([]);
   });
 
+  it('follows imports through the @/ alias to <root>/src, from a file in any folder', async () => {
+    const root = await tempDir();
+    await writeFiles(root, {
+      ...PAGES,
+      'src/routes/AppRoutes.tsx': [
+        "import Dashboard from '@/pages/Dashboard';", // 1
+        "import Admin from '@/pages/Admin';",
+        "import { Notes } from '@/pages/Notes';",
+        "import ProtectedRoute from '@/components/ProtectedRoute';",
+        "const Reports = lazy(() => import('@/pages/Reports.jsx'));", // 5
+        '',
+        '<Routes>',
+        '  <Route path="/dashboard" element={<Dashboard />} />',
+        '  <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />',
+        '  <Route element={<ProtectedRoute />}>', // 10
+        '    <Route path="/notes" element={<Notes />} />',
+        '  </Route>',
+        '  <Route path="/reports" element={<Reports />} />',
+        '</Routes>',
+      ].join('\n'),
+    });
+    const findings = await run(root);
+    expect(reviews(findings)).toEqual([
+      ['Route /dashboard renders data without an auth check', 'src/routes/AppRoutes.tsx:8'],
+      ['Route /reports renders data without an auth check', 'src/routes/AppRoutes.tsx:13'],
+    ]);
+    expect(findings[0]!.why).toContain('(src/pages/Dashboard.tsx)');
+  });
+
+  it('gives no review entry for an @/ import that names no file under src/', async () => {
+    const root = await tempDir();
+    await writeFiles(root, {
+      'pages/Dashboard.tsx': PAGES['src/pages/Dashboard.tsx'],
+      'src/App.tsx': "import Dashboard from '@/pages/Dashboard';\n<Route path=\"/dashboard\" element={<Dashboard />} />\n",
+    });
+    expect(reviews(await run(root))).toEqual([]);
+  });
+
   it('reads only src/, and skips an odd file without failing', async () => {
     const root = await tempDir();
     await writeFiles(root, {
@@ -193,6 +231,20 @@ describe('importsOf', () => {
       "const I = React.lazy(() => import('../i'));",
     ].join('\n');
     expect(Object.fromEntries(importsOf(src))).toEqual({ A: './x', B: './x', D: './x', I: '../i' });
+  });
+
+  it('maps imports through the @/ alias, but not other scoped packages', () => {
+    const src = [
+      "import Book from '@/pages/Book';",
+      "import { Button } from '@/components/ui/button';",
+      "import { createClient } from '@supabase/supabase-js';",
+      "const Reports = lazy(() => import('@/pages/Reports'));",
+    ].join('\n');
+    expect(Object.fromEntries(importsOf(src))).toEqual({
+      Book: '@/pages/Book',
+      Button: '@/components/ui/button',
+      Reports: '@/pages/Reports',
+    });
   });
 });
 
