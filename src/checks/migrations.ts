@@ -156,11 +156,49 @@ export function lintSql(sql: string): { rule: Rule; line: number }[] {
 }
 
 /**
- * The pattern the suggested CI step greps new migrations for (`grep -iP`): the same eight rules,
- * line by line, so a statement split over lines can slip past it.
+ * The pattern the suggested CI step matches new migrations against, case-insensitively: the same
+ * eight rules, line by line, so a statement split over lines can slip past it.
  */
 export const CI_PATTERN =
   String.raw`\bdrop\s+(column|table)\b|\brename\s+(column|to)\b|\bset\s+not\s+null\b|\balter\s+column\s+\S+\s+(set\s+data\s+)?type\b|\badd\s+column\b(?![^;,]*\b(default|generated\s+always)\b)[^;,]*\bnot\s+null\b|\btruncate\b`;
+
+/**
+ * The shell the suggested CI step runs. It matches with perl rather than `grep -P`, which BSD grep
+ * (macOS) does not have: perl is on both macOS and GitHub's Ubuntu runners, and its regular
+ * expressions are the ones PCRE copies. It fails closed: the added migrations are read
+ * NUL-separated (never C-quoted, never word-split), and the step fails when it cannot list them,
+ * when any file matches (perl exits 1, after printing file:line:text for each hit), or when perl
+ * exits with anything but 0 or 1, such as 2 for a file it cannot open. Every failure names the file.
+ */
+export const CI_SCRIPT = `list=$(mktemp)
+if ! git diff -z --name-only --diff-filter=A "origin/\${{ github.base_ref }}...HEAD" -- 'supabase/migrations/*.sql' > "$list"; then
+  echo "::error::Could not list the migrations this pull request adds."
+  exit 1
+fi
+status=0
+while IFS= read -r -d '' file; do
+  rc=0
+  perl -e '
+    my $file = shift;
+    open(my $fh, "<", $file) or exit 2;
+    my $hit = 0;
+    while (my $line = <$fh>) {
+      chomp $line;
+      if ($line =~ /${CI_PATTERN}/i) { print "$file:$.:$line\\n"; $hit = 1; }
+    }
+    close($fh) or exit 2;
+    exit $hit;
+  ' -- "$file" || rc=$?
+  if [ "$rc" -eq 1 ]; then
+    echo "::error file=$file::$file is not backward-compatible: it drops, renames, retypes or truncates, or adds a required column without a default. Split it into backward-compatible steps."
+    status=1
+  elif [ "$rc" -ne 0 ]; then
+    echo "::error file=$file::Could not check $file: perl exited $rc."
+    status=1
+  fi
+done < "$list"
+exit "$status"
+`;
 
 const CI_SNIPPET = `# .github/workflows/migration-check.yml
 name: migration-check
@@ -177,13 +215,7 @@ jobs:
       - name: New migrations are backward-compatible
         shell: bash
         run: |
-          files=$(git diff --name-only --diff-filter=A "origin/\${{ github.base_ref }}...HEAD" -- 'supabase/migrations/*.sql')
-          [ -n "$files" ] || exit 0
-          if grep -niP '${CI_PATTERN}' $files; then
-            echo "::error::A new migration drops, renames, retypes or truncates, or adds a required column without a default. Split it into backward-compatible steps."
-            exit 1
-          fi
-`;
+${CI_SCRIPT.replace(/^(?=.)/gm, '          ')}`;
 
 export const migrationsCheck: Check = {
   id: 'f',
@@ -217,7 +249,7 @@ export const migrationsCheck: Check = {
           location: { file, line },
           why: `${rule.message} A migration that has been applied cannot be undone, so this is reported to catch the next one before it ships.`,
           fix: {
-            text: 'Add a step to CI that fails a pull request whose new migrations are not backward-compatible. This one greps the migrations a pull request adds for the same patterns this check looks for.',
+            text: 'Add a step to CI that fails a pull request whose new migrations are not backward-compatible. This one checks the migrations a pull request adds for the same patterns this check looks for, and fails too when it cannot check one.',
             snippet: { language: 'yaml', code: CI_SNIPPET },
           },
           checkBefore:

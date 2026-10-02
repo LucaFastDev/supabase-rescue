@@ -1,6 +1,9 @@
+import { spawnSync } from 'node:child_process';
+import { rm } from 'node:fs/promises';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CI_PATTERN, RULES, lintSql, migrationsCheck, splitStatements } from '../src/checks/migrations.ts';
-import { tempDir, writeFiles } from './repo.ts';
+import { CI_PATTERN, CI_SCRIPT, RULES, lintSql, migrationsCheck, splitStatements } from '../src/checks/migrations.ts';
+import { commitAll, git, gitRepo, tempDir, writeFiles } from './repo.ts';
 
 // Ported from ai-hq's scripts/check-migration.test.mjs, without the waiver and --base cases.
 const blockers = (sql: string) => lintSql(sql).map((f) => f.rule.id);
@@ -80,7 +83,8 @@ describe('check f', () => {
     expect(drop!.fix.snippet?.language).toBe('yaml');
     expect(drop!.fix.snippet?.code).toContain('runs-on: ubuntu-latest');
     expect(drop!.fix.snippet?.code).toContain('origin/${{ github.base_ref }}...HEAD');
-    expect(drop!.fix.snippet?.code).toContain(`grep -niP '${CI_PATTERN}'`);
+    expect(drop!.fix.snippet?.code).toContain(`run: |\n${CI_SCRIPT.replace(/^(?=.)/gm, '          ')}`);
+    expect(CI_SCRIPT).toContain(`if ($line =~ /${CI_PATTERN}/i)`);
   });
 
   it('finds nothing in additive migrations', async () => {
@@ -96,7 +100,7 @@ describe('check f', () => {
 });
 
 describe('the CI step it suggests', () => {
-  // grep -P and JavaScript agree on everything this pattern uses.
+  // Perl and JavaScript agree on everything this pattern uses.
   const ci = new RegExp(CI_PATTERN, 'i');
 
   it.each(Object.entries(BLOCKER_CASES))('flags %s', (_id, sql) => {
@@ -105,5 +109,80 @@ describe('the CI step it suggests', () => {
 
   it.each(ADDITIVE_CASES)('passes %s', (sql) => {
     expect(ci.test(sql)).toBe(false);
+  });
+});
+
+describe('the CI step, run in a git repo', () => {
+  const DIR = 'supabase/migrations';
+
+  /** A repo whose origin/main holds one migration; the pull request's commits go on top. */
+  async function pullRequest(added: Record<string, string>): Promise<string> {
+    const root = await gitRepo();
+    await writeFiles(root, { [`${DIR}/20260101000000_init.sql`]: 'create table public.a (id int, b text);\n' });
+    commitAll(root, 'base');
+    git(root, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+    await writeFiles(root, added);
+    commitAll(root, 'the pull request');
+    return root;
+  }
+
+  /** Runs the step's script as GitHub's `shell: bash` does, with main as the base branch. */
+  function step(root: string) {
+    const script = CI_SCRIPT.replaceAll('${{ github.base_ref }}', 'main');
+    const result = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', script], { cwd: root, encoding: 'utf8' });
+    return { status: result.status, output: `${result.stdout}${result.stderr}` };
+  }
+
+  it.each([
+    { name: 'a space', file: '20261001000000_drop old column.sql' },
+    { name: 'a non-ASCII character', file: '20261001000000_café.sql' },
+    { name: 'a quote', file: '20261001000000_say "bye".sql' },
+  ])('fails for a blocking migration whose name has $name, naming the file', async ({ file }) => {
+    const root = await pullRequest({ [`${DIR}/${file}`]: 'alter table public.a drop column b;\n' });
+    const result = step(root);
+    expect(result.status, result.output).not.toBe(0);
+    expect(result.output).toContain(`${DIR}/${file}:1:alter table public.a drop column b;\n`);
+    expect(result.output).toContain(`::error file=${DIR}/${file}::${DIR}/${file} is not backward-compatible`);
+  });
+
+  it('fails when a second new migration blocks and the first does not', async () => {
+    const root = await pullRequest({
+      [`${DIR}/20261001000000_add note.sql`]: 'alter table public.a add column note text;\n',
+      [`${DIR}/20261001000001_truncate.sql`]: 'truncate public.a;\n',
+    });
+    const result = step(root);
+    expect(result.status, result.output).toBe(1);
+    expect(result.output).toContain(`${DIR}/20261001000001_truncate.sql is not backward-compatible`);
+    expect(result.output).not.toContain('20261001000000_add note.sql is not');
+  });
+
+  it('passes additive migrations, whatever their names', async () => {
+    const root = await pullRequest({
+      [`${DIR}/20261001000000_add note café.sql`]: 'alter table public.a add column note text;\n',
+      [`${DIR}/20261001000001_new table.sql`]: 'create table public.c (id int not null);\n',
+    });
+    const result = step(root);
+    expect(result).toEqual({ status: 0, output: '' });
+  });
+
+  it('passes when the pull request adds no migration', async () => {
+    const root = await pullRequest({ 'README.md': 'docs\n' });
+    expect(step(root)).toEqual({ status: 0, output: '' });
+  });
+
+  it('fails, naming the file, when grep cannot read a new migration', async () => {
+    const root = await pullRequest({ [`${DIR}/20261001000000_gone away.sql`]: 'alter table public.a add column note text;\n' });
+    await rm(path.join(root, DIR, '20261001000000_gone away.sql'));
+    const result = step(root);
+    expect(result.status, result.output).toBe(1);
+    expect(result.output).toContain(`::error file=${DIR}/20261001000000_gone away.sql::Could not check ${DIR}/20261001000000_gone away.sql: perl exited 2.`);
+  });
+
+  it('fails when it cannot list the new migrations', async () => {
+    const root = await pullRequest({ [`${DIR}/20261001000000_add.sql`]: 'alter table public.a add column note text;\n' });
+    git(root, 'update-ref', '-d', 'refs/remotes/origin/main');
+    const result = step(root);
+    expect(result.status, result.output).toBe(1);
+    expect(result.output).toContain('::error::Could not list the migrations this pull request adds.');
   });
 });
