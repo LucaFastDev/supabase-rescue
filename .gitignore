@@ -5,3 +5,5 @@ node_modules/
 /report.json
 demo/supabase/.temp/
 demo/supabase/.branches/
+test-results/
+playwright-report/
