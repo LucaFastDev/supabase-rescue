@@ -1,0 +1,29 @@
+# Local stack for the demo app. Only what differs from the CLI defaults is set here;
+# the CLI fills every other key. Every port is the Supabase default + 2000, so this
+# stack runs alongside ai-hq (defaults) and docs-chat (+1000).
+project_id = "supabase-rescue"
+
+[api]
+port = 56321
+
+[db]
+port = 56322
+shadow_port = 56320
+
+[db.pooler]
+port = 56329
+
+[studio]
+port = 56323
+
+[local_smtp]
+port = 56324
+smtp_port = 56325
+pop3_port = 56326
+
+[edge_runtime]
+inspector_port = 10083
+
+[analytics]
+port = 56327
+vector_port = 56328

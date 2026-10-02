@@ -1,0 +1,1 @@
+-- Seed data for the demo app. Empty until the sample app adds its tables.
