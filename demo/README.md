@@ -2,18 +2,18 @@
 
 A small booking app for a fictional hair salon, written the way a fresh Lovable project is: React, Vite, TypeScript, Tailwind with shadcn/ui, supabase-js and React Router. The audit in the root of this repo is proven against it.
 
-**It is deliberately insecure.** It carries exactly one seeded flaw for each of the audit's checks a to f, each marked in the code with a `FLAW (check x)` comment. Run it only against the local stack. Never deploy it.
+**It was built deliberately insecure, then fixed.** The tag `before` carries exactly one seeded flaw for each of the audit's checks a to f, each marked in the code with a `FLAW (check x)` comment. The fix pull request repairs a to e with new migrations and code changes. The flaw comments in the migrations that were already applied stay, because an applied migration is never edited; each new migration names the flaw it fixes. Flaw f stays too: the migration that dropped `customers.notes` cannot be undone, so the fix adds a CI step that stops the next one. Run the app only against the local stack. Never deploy it.
 
-| Check | The flaw | Where |
-|---|---|---|
-| a | `staff_notes` has row level security off | `supabase/migrations/20260915110000_staff_notes.sql` |
-| b | The booking form's anon INSERT policy on `appointments` is `with check (true)` | `supabase/migrations/20260901090000_init.sql` |
-| c | `appointments_for_phone` is SECURITY DEFINER, anon can execute it, and it has no `search_path` | `supabase/migrations/20260908100000_find_my_booking.sql` |
-| d | The local stack's service-role key in a `supabaseAdmin` client the Customers page uses | `src/integrations/supabase/admin.ts` |
-| e | `enable_confirmations = false` under `[auth.email]`, and the Reports route has no auth check | `supabase/config.toml`, `src/App.tsx` |
-| f | A migration drops `customers.notes` | `supabase/migrations/20260915110000_staff_notes.sql` |
+| Check | The flaw | Where | Fixed by |
+|---|---|---|---|
+| a | `staff_notes` has row level security off | `supabase/migrations/20260915110000_staff_notes.sql` | `supabase/migrations/20261002090000_staff_notes_rls.sql`: RLS on, staff-only policies |
+| b | The booking form's anon INSERT policy on `appointments` is `with check (true)` | `supabase/migrations/20260901090000_init.sql` | `supabase/migrations/20261002090100_booking_insert_policy.sql`: visitors may add only a future booking with status `booked` |
+| c | `appointments_for_phone` is SECURITY DEFINER, anon can execute it, and it has no `search_path` | `supabase/migrations/20260908100000_find_my_booking.sql` | `supabase/migrations/20261002090200_remove_find_my_booking.sql` drops it; the booking page shows a booking reference instead |
+| d | The local stack's service-role key in a `supabaseAdmin` client the Customers page uses | `src/integrations/supabase/admin.ts` | The file is deleted and Customers uses the anon-key client; the key stays in the git history, so it must be rotated |
+| e | `enable_confirmations = false` under `[auth.email]`, and the Reports route has no auth check | `supabase/config.toml`, `src/App.tsx` | Confirmations on; `/reports` moved inside `ProtectedRoute` |
+| f | A migration drops `customers.notes` | `supabase/migrations/20260915110000_staff_notes.sql` | Not undoable; `.github/workflows/migrations-check.yml` fails a pull request that adds such a migration |
 
-Pages: a public "Book an appointment" form with "Find my booking" (`/`), staff sign in (`/login`), Appointments, Customers, a customer's detail with their appointments, staff notes per customer, and Reports (appointments per week).
+Pages: a public "Book an appointment" form that gives a booking reference (`/`), staff sign in (`/login`), Appointments (with each booking's reference), Customers, a customer's detail with their appointments, staff notes per customer, and Reports (appointments per week).
 
 ## Run it
 

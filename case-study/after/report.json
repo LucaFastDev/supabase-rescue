@@ -1,0 +1,106 @@
+{
+  "tool": {
+    "name": "supabase-rescue",
+    "version": "0.1.0"
+  },
+  "target": "demo",
+  "findings": [
+    {
+      "check": "f",
+      "severity": "low",
+      "title": "Migration drops a column",
+      "location": {
+        "file": "supabase/migrations/20260915110000_staff_notes.sql",
+        "line": 23
+      },
+      "why": "It drops a column. A version of the app that still reads that column, including tabs your users already have open, starts failing the moment it runs, and the data in the column is gone. The safe order is to ship a release that stops using the column, then drop it in a later migration. A migration that has been applied cannot be undone, so this is reported to catch the next one before it ships.",
+      "fix": {
+        "text": "Add a step to CI that fails a pull request whose new migrations are not backward-compatible. This one checks the migrations a pull request adds for the same patterns this check looks for, and fails too when it cannot check one.",
+        "snippet": {
+          "language": "yaml",
+          "code": "# .github/workflows/migration-check.yml\nname: migration-check\non:\n  pull_request:\n    paths: ['supabase/migrations/**']\njobs:\n  migrations:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          fetch-depth: 0\n      - name: New migrations are backward-compatible\n        shell: bash\n        run: |\n          list=$(mktemp)\n          if ! git diff -z --name-only --diff-filter=A \"origin/${{ github.base_ref }}...HEAD\" -- 'supabase/migrations/*.sql' > \"$list\"; then\n            echo \"::error::Could not list the migrations this pull request adds.\"\n            exit 1\n          fi\n          status=0\n          while IFS= read -r -d '' file; do\n            rc=0\n            perl -e '\n              my $file = shift;\n              open(my $fh, \"<\", $file) or exit 2;\n              my $hit = 0;\n              while (my $line = <$fh>) {\n                chomp $line;\n                if ($line =~ /\\bdrop\\s+(column|table)\\b|\\brename\\s+(column|to)\\b|\\bset\\s+not\\s+null\\b|\\balter\\s+column\\s+\\S+\\s+(set\\s+data\\s+)?type\\b|\\badd\\s+column\\b(?![^;,]*\\b(default|generated\\s+always)\\b)[^;,]*\\bnot\\s+null\\b|\\btruncate\\b/i) { print \"$file:$.:$line\\n\"; $hit = 1; }\n              }\n              close($fh) or exit 2;\n              exit $hit;\n            ' -- \"$file\" || rc=$?\n            if [ \"$rc\" -eq 1 ]; then\n              echo \"::error file=$file::$file is not backward-compatible: it drops, renames, retypes or truncates, or adds a required column without a default. Split it into backward-compatible steps.\"\n              status=1\n            elif [ \"$rc\" -ne 0 ]; then\n              echo \"::error file=$file::Could not check $file: perl exited $rc.\"\n              status=1\n            fi\n          done < \"$list\"\n          exit \"$status\"\n"
+        }
+      },
+      "checkBefore": "Whether this migration has already been applied to production. If it has, confirm the live app no longer depends on what it changed. If it has not, split it into backward-compatible steps before applying it."
+    },
+    {
+      "check": "d",
+      "kind": "manual",
+      "title": "Rotate the Supabase service-role key eyJhbG…81IU found in the git history",
+      "location": {
+        "file": "src/integrations/supabase/admin.ts",
+        "line": 7
+      },
+      "why": "Rotate this key: it is in the git history at 5cf7438 src/integrations/supabase/admin.ts, and the history keeps it after any fix; the tool cannot see whether you rotated it.",
+      "fix": {
+        "text": "In the Supabase dashboard, Project Settings, API Keys: move to the new publishable and secret keys and disable the legacy JWT-based keys, or roll the JWT secret (which replaces the anon key too). Rewriting the history does not help: every clone and fork already has the key."
+      },
+      "checkBefore": "Every place that uses this key (servers, edge functions, CI, local env files), so you can give them the new one before the old one stops working."
+    },
+    {
+      "check": "e",
+      "kind": "manual",
+      "title": "Leaked password protection is on",
+      "location": {
+        "object": "Supabase dashboard: Authentication > Attack Protection"
+      },
+      "why": "It refuses passwords known from public data breaches, which are the first ones attackers try. The tool cannot read the live project's auth settings without the Management API, which it never uses.",
+      "fix": {
+        "text": "In the Supabase dashboard, Authentication, Attack Protection: turn on leaked password protection."
+      },
+      "checkBefore": "That your sign-up and password-reset forms show the error the API returns when a password is refused."
+    },
+    {
+      "check": "e",
+      "kind": "manual",
+      "title": "Minimum password length is at least 8",
+      "location": {
+        "object": "Supabase dashboard: Authentication > Attack Protection"
+      },
+      "why": "Short passwords fall to guessing quickly. The tool cannot read the live project's auth settings without the Management API, which it never uses.",
+      "fix": {
+        "text": "In the Supabase dashboard, Authentication, Attack Protection: set the minimum password length to 8 or more."
+      },
+      "checkBefore": "That your sign-up form's own validation and message match the new minimum. Existing passwords keep working."
+    },
+    {
+      "check": "e",
+      "kind": "manual",
+      "title": "Confirm email is on",
+      "location": {
+        "object": "Supabase dashboard: Authentication > Sign In / Providers > Email"
+      },
+      "why": "Without email confirmation, anyone can sign up with an address they do not own, and the account works at once. The tool cannot read the live project's auth settings without the Management API, which it never uses.",
+      "fix": {
+        "text": "In the Supabase dashboard, Authentication, Sign In / Providers, Email: turn on Confirm email."
+      },
+      "checkBefore": "That your sign-up flow tells users to check their inbox, and that the link in the email goes to an allowed redirect URL."
+    },
+    {
+      "check": "e",
+      "kind": "manual",
+      "title": "Secure email change is on",
+      "location": {
+        "object": "Supabase dashboard: Authentication > Sign In / Providers > Email"
+      },
+      "why": "Without it, a new email address needs confirming only from the new address, so someone with brief access to a signed-in session can move the account to an inbox they control. The tool cannot read the live project's auth settings without the Management API, which it never uses.",
+      "fix": {
+        "text": "In the Supabase dashboard, Authentication, Sign In / Providers, Email: turn on Secure email change."
+      },
+      "checkBefore": "How users who can no longer reach their old inbox will change their address: they will need your support."
+    },
+    {
+      "check": "e",
+      "kind": "manual",
+      "title": "Site URL and redirect URLs list only the app's own domains",
+      "location": {
+        "object": "Supabase dashboard: Authentication > URL Configuration"
+      },
+      "why": "Sign-in links, password resets and OAuth sign-ins send users, with their session, to these URLs. A broad wildcard or a domain you do not control lets someone else receive a session. The tool cannot read the live project's auth settings without the Management API, which it never uses.",
+      "fix": {
+        "text": "In the Supabase dashboard, Authentication, URL Configuration: set Site URL to the app's production address, and list in Redirect URLs only the app's own domains (and localhost while developing), without broad wildcards."
+      },
+      "checkBefore": "Every redirectTo and emailRedirectTo your app passes, so each one is still on the list."
+    }
+  ]
+}

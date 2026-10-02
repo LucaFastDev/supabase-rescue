@@ -5,21 +5,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
-import { SERVICES, formatDateTime } from "@/lib/types";
-
-interface UpcomingBooking {
-  starts_at: string;
-  service: string;
-  status: string;
-}
+import { SERVICES, bookingReference } from "@/lib/types";
 
 const Book = () => {
   const [signedIn, setSignedIn] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [lookupPhone, setLookupPhone] = useState("");
-  const [bookings, setBookings] = useState<UpcomingBooking[] | null>(null);
-  const [lookupError, setLookupError] = useState<string | null>(null);
+  const [reference, setReference] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSignedIn(data.session !== null));
@@ -31,7 +23,11 @@ const Book = () => {
     const form = new FormData(formElement);
     setSubmitting(true);
     setMessage(null);
+    setReference(null);
+    // The id is made here, because visitors may add a booking but not read one back.
+    const id = crypto.randomUUID();
     const { error } = await supabase.from("appointments").insert({
+      id,
       customer_name: String(form.get("name")),
       customer_phone: String(form.get("phone")),
       customer_email: String(form.get("email")) || null,
@@ -44,19 +40,7 @@ const Book = () => {
       return;
     }
     formElement.reset();
-    setMessage("Thank you! Your appointment is booked. We will confirm it by phone.");
-  };
-
-  const findBookings = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setLookupError(null);
-    const { data, error } = await supabase.rpc("appointments_for_phone", { phone_number: lookupPhone });
-    if (error) {
-      setBookings(null);
-      setLookupError(`Sorry, we could not look that up: ${error.message}`);
-      return;
-    }
-    setBookings((data ?? []) as UpcomingBooking[]);
+    setReference(bookingReference(id));
   };
 
   return (
@@ -114,43 +98,18 @@ const Book = () => {
                 <Button type="submit" disabled={submitting}>
                   {submitting ? "Booking…" : "Book"}
                 </Button>
-                {message && <p className="text-sm text-muted-foreground">{message}</p>}
+                {message && <p className="text-sm text-destructive">{message}</p>}
               </div>
             </form>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Find my booking</CardTitle>
-            <CardDescription>Enter the phone number you booked with to see your upcoming appointments.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <form className="flex gap-2" onSubmit={findBookings}>
-              <Input
-                aria-label="Phone"
-                type="tel"
-                value={lookupPhone}
-                onChange={(event) => setLookupPhone(event.target.value)}
-                required
-              />
-              <Button type="submit" variant="secondary">
-                Find
-              </Button>
-            </form>
-            {lookupError && <p className="text-sm text-destructive">{lookupError}</p>}
-            {bookings !== null &&
-              (bookings.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No upcoming appointments for that number.</p>
-              ) : (
-                <ul className="grid gap-1 text-sm">
-                  {bookings.map((booking) => (
-                    <li key={booking.starts_at}>
-                      {formatDateTime(booking.starts_at)}: {booking.service} ({booking.status})
-                    </li>
-                  ))}
-                </ul>
-              ))}
+            {reference && (
+              <div className="mt-4 rounded-md border bg-muted/50 p-4 text-sm" role="status">
+                <p className="font-medium">Thank you! Your appointment is booked. We will confirm it by phone.</p>
+                <p className="text-muted-foreground">
+                  Your booking reference is <span className="font-mono font-semibold text-foreground">{reference}</span>.
+                  Quote it if you call us about this booking.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </main>

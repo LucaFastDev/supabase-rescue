@@ -30,6 +30,11 @@ export interface StaffNote {
   staff: { display_name: string } | null;
 }
 
+/** The short booking reference a customer is given: the appointment id's first 8 characters, uppercased. */
+export function bookingReference(appointmentId: string): string {
+  return appointmentId.slice(0, 8).toUpperCase();
+}
+
 export function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
 }
