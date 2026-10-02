@@ -21,12 +21,9 @@ const App = () => (
           <Route path="/customers" element={<Customers />} />
           <Route path="/customers/:id" element={<CustomerDetail />} />
           <Route path="/customers/:id/notes" element={<StaffNotes />} />
+          {/* Fixed (check e): Reports now sits inside ProtectedRoute like every other staff page. */}
+          <Route path="/reports" element={<Reports />} />
         </Route>
-      </Route>
-      <Route element={<StaffLayout />}>
-        {/* FLAW (check e): Reports was added later, inside the staff layout for its navigation but
-            outside ProtectedRoute, so the page renders for visitors who are not signed in. */}
-        <Route path="/reports" element={<Reports />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

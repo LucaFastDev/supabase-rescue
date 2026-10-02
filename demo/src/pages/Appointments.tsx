@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
-import { STATUSES, formatDateTime, type Appointment, type Status } from "@/lib/types";
+import { STATUSES, bookingReference, formatDateTime, type Appointment, type Status } from "@/lib/types";
 
 const Appointments = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -35,6 +35,7 @@ const Appointments = () => {
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead>Reference</TableHead>
             <TableHead>When</TableHead>
             <TableHead>Customer</TableHead>
             <TableHead>Phone</TableHead>
@@ -45,6 +46,7 @@ const Appointments = () => {
         <TableBody>
           {appointments.map((appointment) => (
             <TableRow key={appointment.id}>
+              <TableCell className="font-mono">{bookingReference(appointment.id)}</TableCell>
               <TableCell>{formatDateTime(appointment.starts_at)}</TableCell>
               <TableCell>
                 {appointment.customer_id ? (

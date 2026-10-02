@@ -1,0 +1,45 @@
+# Fails a pull request whose new migrations are not backward-compatible: one that drops,
+# renames, retypes or truncates, or adds a required column without a default. This is the step
+# the audit's check f suggests. In the app's own repository it sits at the root's .github/.
+name: migration-check
+on:
+  pull_request:
+    paths: ['supabase/migrations/**']
+jobs:
+  migrations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: New migrations are backward-compatible
+        shell: bash
+        run: |
+          list=$(mktemp)
+          if ! git diff -z --name-only --diff-filter=A "origin/${{ github.base_ref }}...HEAD" -- 'supabase/migrations/*.sql' > "$list"; then
+            echo "::error::Could not list the migrations this pull request adds."
+            exit 1
+          fi
+          status=0
+          while IFS= read -r -d '' file; do
+            rc=0
+            perl -e '
+              my $file = shift;
+              open(my $fh, "<", $file) or exit 2;
+              my $hit = 0;
+              while (my $line = <$fh>) {
+                chomp $line;
+                if ($line =~ /\bdrop\s+(column|table)\b|\brename\s+(column|to)\b|\bset\s+not\s+null\b|\balter\s+column\s+\S+\s+(set\s+data\s+)?type\b|\badd\s+column\b(?![^;,]*\b(default|generated\s+always)\b)[^;,]*\bnot\s+null\b|\btruncate\b/i) { print "$file:$.:$line\n"; $hit = 1; }
+              }
+              close($fh) or exit 2;
+              exit $hit;
+            ' -- "$file" || rc=$?
+            if [ "$rc" -eq 1 ]; then
+              echo "::error file=$file::$file is not backward-compatible: it drops, renames, retypes or truncates, or adds a required column without a default. Split it into backward-compatible steps."
+              status=1
+            elif [ "$rc" -ne 0 ]; then
+              echo "::error file=$file::Could not check $file: perl exited $rc."
+              status=1
+            fi
+          done < "$list"
+          exit "$status"
