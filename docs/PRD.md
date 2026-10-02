@@ -12,7 +12,7 @@ A Node/TypeScript command-line tool, run from a checkout of this repo.
 
 - `audit <path> [--db <connection string>]` reads a client repo checkout: migrations, `supabase/config.toml`, frontend source, committed env files, and the git history of that path for keys that were committed and later deleted. With `--db` it also reads the live database's catalogs: RLS state, policies, grants, functions. It never uses the service-role key or the Management API, and never writes anything.
 - History is read only for the audited path: auditing `demo/` reads `demo/` and its history, never the tool's own test fixtures, which contain fake keys on purpose.
-- `role-sql` prints the SQL a client runs to create a dedicated login role for the audit. The role can read the catalogs and nothing else: no SELECT on any table, so the audit never sees the client's data. The tool also opens every database connection read-only, so even a wrongly granted role cannot write.
+- `role-sql` prints the SQL a client runs to create a dedicated login role for the audit. The role is given no access to any table, view or sequence, so it cannot read or change a row directly. Read-only is the default for its sessions, but a session can turn it off, so it is not a guarantee; the tool itself always opens a read-only transaction and runs only catalog queries. Like every role, it can call any function that PUBLIC may execute (Postgres's default for new functions), and a SECURITY DEFINER function runs with its owner's rights, so such a function can read or change data whoever calls it; check c reports these functions, and its fixes close this path. So the client gives the password only to the audit, and drops the role when the audit is done.
 - Output: `report.md` for the client and `report.json` with the same findings for scripts. Exit code 0 when nothing is critical or high, 1 otherwise.
 - The tool only suggests fixes. Each finding carries its fix there and then (the SQL or code to apply, and why) plus what to check before applying it. The tool writes no migration files and changes nothing in the audited repo or database. Delivering the fix is a separate job done by a person or a worker, as a pull request tested against the app.
 
@@ -42,7 +42,7 @@ A small booking app (customers, appointments, staff notes) in `demo/`, hand-writ
 
 The flawed app lands on `main` first and is tagged `before`. The fix lands as one real pull request, migrations and code, the way a client would receive it; the case study links it as the exhibit. After it, the audit finds nothing critical, high or medium. The case study (`case-study/README.md`) shows the before report, the fix, the after report, and a "What access to give" section in three tiers:
 
-1. **Analyse** and 2. **analyse and suggest** need the same access: read access to the repo, plus optionally the read-only catalog role from `role-sql` (no table rows).
+1. **Analyse** and 2. **analyse and suggest** need the same access: read access to the repo, plus optionally the audit role from `role-sql` (no direct access to any table's rows).
 3. **Fix** needs more: write access to the repo (or a pull request from a fork) and a way to apply migrations, either the client's own pipeline or a member role in their Supabase organization.
 
 ## Acceptance criteria
@@ -50,7 +50,7 @@ The flawed app lands on `main` first and is tagged `before`. The fix lands as on
 - Each check a to f has a test with a fixture that triggers it and one that does not.
 - Against the flawed sample app (`demo/` and its local database), the audit reports exactly one finding with a severity for each check a to f, plus the review entry for the unguarded route; the before report is committed.
 - Against the fixed app: nothing critical, high or medium, no review entries, and the manual actions are only the key rotation (the key stays in the history) and the fixed list of dashboard auth checks; the after report is committed.
-- In CI, the `role-sql` output is applied to the local stack, the audit runs with that role, and a test shows the role can neither write anything nor read a row of any app table.
+- In CI, the `role-sql` output is applied to the local stack, the audit runs with that role, and a test shows the role cannot write to or read a row of any app table directly, and that the tool's own connection cannot write even as the superuser.
 - CI runs on the operator's Mac while the repo is private.
 
 ## Out of scope

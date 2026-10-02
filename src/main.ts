@@ -8,6 +8,7 @@ import { exposedSchemas, readConfig } from './config.ts';
 import { exitCodeFor } from './findings.ts';
 import { renderJson, renderMarkdown } from './report.ts';
 import type { ReportMeta } from './report.ts';
+import { ROLE_SQL } from './rolesql.ts';
 
 export interface MainOptions {
   cwd?: string;
@@ -20,7 +21,8 @@ const USAGE = 'usage: audit <path> [--db <connection string>] [--out <dir>] | ro
 
 /**
  * Runs the CLI and returns its exit code: 0 nothing critical or high, 1 something critical or
- * high, 2 the audit could not run (bad arguments, a bad path, an error while writing).
+ * high, 2 the audit could not run (bad arguments, a bad path, a database error, an error while
+ * writing).
  */
 export async function main(argv: readonly string[], options: MainOptions = {}): Promise<number> {
   const cwd = options.cwd ?? process.cwd();
@@ -30,7 +32,7 @@ export async function main(argv: readonly string[], options: MainOptions = {}): 
 
   try {
     if (command === 'role-sql') {
-      stdout('-- role-sql is not implemented yet.\n');
+      stdout(ROLE_SQL);
       return 0;
     }
     if (command === 'audit') {
