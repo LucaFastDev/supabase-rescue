@@ -10,7 +10,13 @@ Requires Node 22.18 or later and, for the demo stack, Docker. Run `npm install` 
 npm run audit -- <path> [--db <connection string>] [--out <dir>]
 ```
 
-It writes `report.md` (for the client) and `report.json` (the same findings, for scripts) to `--out`, or to the current directory. The exit code is 0 when nothing is critical or high, 1 when something is, and 2 when the audit could not run (for example, `<path>` is not a directory).
+It writes `report.md` (for the client) and `report.json` (the same findings, for scripts) to `--out`, or to the current directory. The exit code is 0 when nothing is critical or high, 1 when something is, and 2 when the audit could not run (for example, `<path>` is not a directory, or its `supabase/config.toml` is not valid TOML).
+
+The checks that read only the repo:
+
+- **d. Secrets:** service-role JWTs, `sb_secret_` keys, database passwords in connection strings, and Stripe, OpenAI and Anthropic keys in the files git tracks under `<path>`, and in the git history of `<path>` only. Secrets are shown masked.
+- **e. Auth gaps:** email confirmation off in `supabase/config.toml`, React Router routes in `src/` that render data without an auth check, and the dashboard auth settings to check by hand.
+- **f. Migrations:** statements in `supabase/migrations/*.sql` that are not backward-compatible with the deployed app (drops, renames, type changes, new required columns, truncates).
 
 ```sh
 npm run --silent role-sql
