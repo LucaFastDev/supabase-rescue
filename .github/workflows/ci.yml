@@ -1,0 +1,60 @@
+# What must hold before anything merges, and what the merge gate reads: an
+# auto-merge needs at least one GitHub Actions check run, all green (ai-hq D61).
+# Agents cannot change this file (ai-hq D24); it is the operator's.
+#
+# On the operator's Mac while the repo is private (ai-hq D81, D85). When the
+# repo goes public this moves to GitHub's own runners: a self-hosted runner
+# must never serve a public repo.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: [self-hosted, mac-ci, supabase-rescue]
+    timeout-minutes: 45
+    steps:
+      # Full history: the secrets check reads a path's git history.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.118.0
+      - name: Install
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      # The sample app's stack (demo/supabase). The database checks' tests use
+      # it too, through TEST_DB_URL. Only the database, auth and the API run.
+      - name: Start the local stack
+        run: supabase start --workdir demo -x realtime,storage-api,imgproxy,mailpit,studio,edge-runtime,logflare,vector,supavisor
+      - name: Replay every migration and the seed again
+        run: supabase db reset --workdir demo
+      - name: Point the tests at the local stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          db="$(supabase status --workdir demo -o json | jq -r '.DB_URL // empty')"
+          [ -n "$db" ] || { echo "supabase status gave no DB_URL"; exit 1; }
+          case "$db" in postgresql://*@127.0.0.1:*|postgresql://*@localhost:*) ;; *) echo "not a local database"; exit 1 ;; esac
+          echo "TEST_DB_URL=$db" >> "$GITHUB_ENV"
+      - name: Tests
+        run: npm test
+      - name: The stack's logs, when something failed
+        if: failure()
+        run: |
+          free -m || true
+          for c in supabase_db_supabase-rescue supabase_auth_supabase-rescue supabase_kong_supabase-rescue; do
+            echo "== $c"; docker logs --tail 120 "$c" 2>&1 || true
+          done

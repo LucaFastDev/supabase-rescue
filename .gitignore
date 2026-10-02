@@ -1,0 +1,7 @@
+node_modules/
+.env*
+!.env.example
+/report.md
+/report.json
+demo/supabase/.temp/
+demo/supabase/.branches/
