@@ -1,5 +1,9 @@
-// The SQL that role-sql prints: a login role for the audit's --db option that can read the
-// catalogs and nothing else. It is safe to run twice, and it sets no password.
+// The SQL that role-sql prints: a login role for the audit's --db option. It is given no access to
+// any table, view or sequence, and read-only is the default for its sessions. Postgres cannot make
+// a login role strictly read-only, nor take PUBLIC's default rights away from one role, so the
+// comments promise no more than that: a session can turn read-only off, and like every role it can
+// call functions PUBLIC may execute, including SECURITY DEFINER ones that run with their owner's
+// rights. It is safe to run twice, and it sets no password.
 
 export const AUDIT_ROLE = 'supabase_rescue_audit';
 
@@ -7,13 +11,24 @@ const ATTRIBUTES = 'login nosuperuser nocreatedb nocreaterole noreplication noby
 
 export const ROLE_SQL = `-- A login role for the supabase-rescue audit (the --db option).
 --
--- What this role can do: sign in and read the database's catalogs, the built-in tables that
--- describe your schema: which tables have row level security on, their policies, your functions
--- and who may call them. That is everything the audit reads.
+-- What this role is given: the right to sign in. Like every role, it can read the database's
+-- catalogs, the built-in tables that describe your schema: which tables have row level security
+-- on, their policies, your functions and who may call them. That is what the audit reads.
 --
--- What it cannot do: read a single row of your data, or change anything. It is given no access to
--- any table, view or sequence. It is not a superuser, cannot create databases or roles, cannot
--- bypass row level security, and every session it opens is read-only.
+-- What it is not given: any access to any table, view or sequence, so it cannot read or change a
+-- row of your data directly. It is not a superuser, cannot create databases or roles, and cannot
+-- bypass row level security.
+--
+-- Read-only is the default for its sessions, but a session can turn that off, so it is not a
+-- guarantee. The audit tool itself always opens a read-only transaction and runs only catalog
+-- queries.
+--
+-- Like every role, it can call any function that PUBLIC may execute, which is what Postgres allows
+-- for new functions unless you revoke it. A SECURITY DEFINER function runs with its owner's rights,
+-- so it can read or change data whoever calls it. The audit's check c reports these functions, and
+-- its fixes close this path.
+--
+-- So give the password only to the audit, and drop the role when the audit is done.
 --
 -- Run this as the postgres user, in the SQL editor or psql. Running it again is safe.
 
@@ -32,7 +47,7 @@ begin
 end
 $$;
 
--- Every session of this role is read-only.
+-- Read-only by default for this role's sessions (a session can turn it off).
 alter role ${AUDIT_ROLE} set default_transaction_read_only = on;
 
 -- No password is set here, so the role cannot sign in yet. Choose a long random password yourself

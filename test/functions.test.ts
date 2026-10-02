@@ -29,13 +29,13 @@ describe('functionProblems', () => {
     expect(functionProblems(fn({ authenticated_can_execute: true }))).toEqual([{ id: 'definer-authenticated', severity: 'high' }]);
   });
 
-  it('checks search_path in schemas that are not exposed, and nothing else there', () => {
+  it('checks only search_path in schemas that are not exposed', () => {
     expect(functionProblems(fn({ exposed: false, anon_can_execute: true, has_search_path: false }))).toEqual([
       { id: 'no-search-path', severity: 'medium' },
     ]);
   });
 
-  it('gives an invoker anon can execute low, and an invoker nothing else', () => {
+  it('gives an invoker anon can execute low, and any other invoker no problem', () => {
     expect(functionProblems(fn({ definer: false, anon_can_execute: true, has_search_path: false }))).toEqual([
       { id: 'invoker-anon', severity: 'low' },
     ]);

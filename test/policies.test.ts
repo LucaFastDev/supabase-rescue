@@ -177,7 +177,7 @@ describe('check b: permissive policies, on the demo stack', () => {
     }
   });
 
-  it('reports nothing else in the schema, and nothing in a schema that is not exposed', () => {
+  it('reports only those seven in the schema, and none in a schema that is not exposed', () => {
     expect(inSchema(findings, fx.schema)).toHaveLength(7);
     expect(inSchema(findings, hidden)).toEqual([]);
   });

@@ -54,7 +54,7 @@ export const NO_DB: Finding = {
   location: { object: 'database (no --db given)' },
   why: "Checks a, b and c look for tables without row level security, policies that let anyone in, and functions anyone can call. They read the live database's catalogs, and this audit ran without --db, so it cannot say whether any of those problems exist.",
   fix: {
-    text: 'Create the read-only audit role with the SQL that role-sql prints, set its password, and run the audit again with --db and a connection string for that role.',
+    text: 'Create the audit role with the SQL that role-sql prints, set its password, and run the audit again with --db and a connection string for that role.',
     snippet: {
       language: 'sh',
       code: [
@@ -64,5 +64,6 @@ export const NO_DB: Finding = {
       ].join('\n'),
     },
   },
-  checkBefore: "That you use the role from role-sql rather than postgres: it can read the catalogs and nothing else, so the audit never sees a row of your data. The tool's own connection is read-only either way.",
+  checkBefore:
+    "That you use the role from role-sql rather than postgres. It is given no access to any table, view or sequence, so it cannot read or change a row directly. Read-only is only the default for its sessions, which a session can turn off; the tool itself always opens a read-only transaction and runs only catalog queries. Like every role, it can call any function that PUBLIC may execute, and a SECURITY DEFINER function runs with its owner's rights, so it can read or change data whoever calls it; check c reports these functions. So give the password only to the audit, and drop the role when the audit is done.",
 };

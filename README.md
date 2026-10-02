@@ -1,6 +1,6 @@
 # supabase-rescue
 
-An audit tool for the security and production gaps typical of apps built with Lovable, Bolt or Cursor on Supabase, proven against a deliberately flawed sample booking app in `demo/`. The tool reads a client's repo (and, optionally, the live database's catalogs through a read-only role), and writes a report of findings, each with a suggested fix and what to check before applying it. It never changes the audited repo or database. See [docs/PRD.md](docs/PRD.md) for the full plan.
+An audit tool for the security and production gaps typical of apps built with Lovable, Bolt or Cursor on Supabase, proven against a deliberately flawed sample booking app in `demo/`. The tool reads a client's repo (and, optionally, the live database's catalogs through a dedicated audit role), and writes a report of findings, each with a suggested fix and what to check before applying it. It never changes the audited repo or database. See [docs/PRD.md](docs/PRD.md) for the full plan.
 
 Requires Node 22.18 or later and, for the demo stack, Docker. Run `npm install` first.
 
@@ -30,7 +30,14 @@ The checks that read only the repo:
 npm run --silent role-sql
 ```
 
-prints the SQL that creates `supabase_rescue_audit`, a login role for `--db` that can read the catalogs and nothing else: no grant on any table, view or sequence, so it never sees a row, and every session it opens is read-only. The client runs it as `postgres` (running it twice is safe), then sets a password themselves, with `\password supabase_rescue_audit` in psql; the SQL sets none. The tool also opens every connection read-only itself, so even a wrongly granted role cannot write. A connection or query error stops the audit with exit code 2 and a one-line error without the password.
+prints the SQL that creates `supabase_rescue_audit`, a login role for `--db`. What it promises, and no more:
+
+- It is given no access to any table, view or sequence, so it cannot read or change a row directly.
+- Read-only is the default for its sessions, but a session can turn that off, so it is not a guarantee. The audit tool itself always opens a read-only transaction and runs only catalog queries.
+- Like every role, it can call any function that PUBLIC may execute (Postgres's default for new functions), and a SECURITY DEFINER function runs with its owner's rights, so such a function can read or change data whoever calls it. Check c reports these functions, and its fixes close this path.
+- So give the password only to the audit, and drop the role when the audit is done.
+
+The client runs it as `postgres` (running it twice is safe), then sets a password themselves, with `\password supabase_rescue_audit` in psql; the SQL sets none. A connection or query error stops the audit with exit code 2 and a one-line error without the password.
 
 ## Start the demo stack
 
@@ -49,7 +56,7 @@ npm run typecheck
 npm test
 ```
 
-The database checks' tests use the demo stack, and nothing else. Start it, then put its database URL in a gitignored `.env.test` at the repo root (or export `TEST_DB_URL`); the tests fail when there is none, or when it is not on `127.0.0.1` or `localhost`:
+The database checks' tests use only the demo stack. Start it, then put its database URL in a gitignored `.env.test` at the repo root (or export `TEST_DB_URL`); the tests fail when there is none, or when it is not on `127.0.0.1` or `localhost`:
 
 ```sh
 npx supabase status --workdir demo -o json   # TEST_DB_URL=<its DB_URL> into .env.test

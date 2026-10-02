@@ -17,7 +17,7 @@ import { tempDir } from './repo.ts';
 const root = fileURLToPath(new URL('..', import.meta.url));
 
 describe('isSkippedSchema', () => {
-  it('matches the listed schemas and the temporary ones, and nothing else', () => {
+  it('matches the listed schemas and the temporary ones, and no other', () => {
     for (const schema of SKIPPED_SCHEMAS) expect(isSkippedSchema(schema), schema).toBe(true);
     for (const schema of ['pg_temp_3', 'pg_toast_temp_12']) expect(isSkippedSchema(schema), schema).toBe(true);
     for (const schema of ['public', 'api', 'pg_tempest', 'authx']) expect(isSkippedSchema(schema), schema).toBe(false);
