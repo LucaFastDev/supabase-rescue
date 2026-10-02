@@ -65,7 +65,7 @@ describe('role-sql', () => {
     expect(comments).toContain('So give the password only to the audit, and drop the role when the audit is done.');
   });
 
-  it('claims neither "nothing else" nor read-only sessions, here or in the README, the PRD or the manual entry', async () => {
+  it('claims neither "nothing else", read-only sessions nor a read-only catalog role, here or in the README, the PRD or the manual entry', async () => {
     const texts = {
       'role-sql': ROLE_SQL,
       'src/rolesql.ts': await readFile(path.join(root, 'src/rolesql.ts'), 'utf8'),
@@ -77,6 +77,7 @@ describe('role-sql', () => {
       const flat = text.replace(/\s*\n\s*(--|\/\/)?\s*/g, ' ');
       expect(flat, name).not.toMatch(/nothing else/i);
       expect(flat, name).not.toMatch(/every session it opens is read-only/i);
+      expect(flat, name).not.toMatch(/read-only catalog role/i);
     }
   });
 });

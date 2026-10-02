@@ -42,7 +42,7 @@ A small booking app (customers, appointments, staff notes) in `demo/`, hand-writ
 
 The flawed app lands on `main` first and is tagged `before`. The fix lands as one real pull request, migrations and code, the way a client would receive it; the case study links it as the exhibit. After it, the audit finds nothing critical, high or medium. The case study (`case-study/README.md`) shows the before report, the fix, the after report, and a "What access to give" section in three tiers:
 
-1. **Analyse** and 2. **analyse and suggest** need the same access: read access to the repo, plus optionally the read-only catalog role from `role-sql` (no table rows).
+1. **Analyse** and 2. **analyse and suggest** need the same access: read access to the repo, plus optionally the audit role from `role-sql` (no direct access to any table's rows).
 3. **Fix** needs more: write access to the repo (or a pull request from a fork) and a way to apply migrations, either the client's own pipeline or a member role in their Supabase organization.
 
 ## Acceptance criteria
