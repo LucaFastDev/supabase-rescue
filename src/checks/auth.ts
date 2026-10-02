@@ -173,7 +173,7 @@ function unguardedRoute(route: Route, page: string): Finding {
 }
 
 /**
- * The first component in the element that resolves through a relative import to a file calling
+ * The first component in the element that resolves through a relative or `@/` import to a file calling
  * `.from(` or `.rpc(`, with no auth call in that file, as a path relative to the audited root.
  */
 async function dataComponentWithoutAuth(
@@ -217,12 +217,18 @@ export function callsData(src: string): boolean {
   return false;
 }
 
-/** Local name → module specifier, for default, named and React.lazy imports of relative paths. */
+/** The `@/` alias of Vite, shadcn/ui and Lovable projects: `@/x` is `<audited root>/src/x`. */
+const SRC_ALIAS = '@/';
+
+/**
+ * Local name → module specifier, for default, named and React.lazy imports of relative paths and
+ * of the `@/` alias.
+ */
 export function importsOf(src: string): Map<string, string> {
   const imports = new Map<string, string>();
-  const relative = (spec: string) => spec.startsWith('./') || spec.startsWith('../');
+  const inRepo = (spec: string) => spec.startsWith('./') || spec.startsWith('../') || spec.startsWith(SRC_ALIAS);
   for (const [, clause, spec] of src.matchAll(/\bimport\s+(?!type\b)([\w$\s{},*]+?)\s+from\s+['"]([^'"]+)['"]/g)) {
-    if (!relative(spec!)) continue;
+    if (!inRepo(spec!)) continue;
     const defaultName = /^\s*([A-Za-z_$][\w$]*)/.exec(clause!)?.[1];
     if (defaultName) imports.set(defaultName, spec!);
     for (const named of /\{([^}]*)\}/.exec(clause!)?.[1]?.split(',') ?? []) {
@@ -232,14 +238,19 @@ export function importsOf(src: string): Map<string, string> {
   }
   const lazy = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:React\.)?lazy\s*\(\s*\(\s*\)\s*=>\s*import\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
   for (const [, name, spec] of src.matchAll(lazy)) {
-    if (relative(spec!)) imports.set(name!, spec!);
+    if (inRepo(spec!)) imports.set(name!, spec!);
   }
   return imports;
 }
 
-/** The file a relative import names, trying each source extension and index file; inside the audited root only. */
+/**
+ * The file a relative or `@/` import names, trying each source extension and index file; inside
+ * the audited root only.
+ */
 async function resolveImport(repoPath: string, fromFile: string, specifier: string): Promise<string | undefined> {
-  const base = path.resolve(path.dirname(fromFile), specifier);
+  const base = specifier.startsWith(SRC_ALIAS)
+    ? path.resolve(repoPath, 'src', specifier.slice(SRC_ALIAS.length))
+    : path.resolve(path.dirname(fromFile), specifier);
   const candidates = [
     ...(SOURCE_EXTENSIONS.includes(path.extname(base)) ? [base] : []),
     ...SOURCE_EXTENSIONS.map((ext) => base + ext),
