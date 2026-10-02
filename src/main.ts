@@ -4,6 +4,7 @@ import { parseArgs } from 'node:util';
 import { runAudit } from './audit.ts';
 import { checks as defaultChecks } from './checks/index.ts';
 import type { Check, CheckContext } from './checks/index.ts';
+import { exposedSchemas, readConfig } from './config.ts';
 import { exitCodeFor } from './findings.ts';
 import { renderJson, renderMarkdown } from './report.ts';
 import type { ReportMeta } from './report.ts';
@@ -70,8 +71,7 @@ async function audit(
   const context: CheckContext = {
     repoPath,
     ...(values.db !== undefined && { db: values.db }),
-    // Reading config.toml's [api] schemas comes with the database checks.
-    exposedSchemas: ['public'],
+    exposedSchemas: exposedSchemas(await readConfig(repoPath)),
   };
   const findings = await runAudit(context, registry);
 
