@@ -1,0 +1,26 @@
+# supabase-rescue
+
+This repo holds two things that are tested separately: an audit tool, and a deliberately flawed sample app the tool is proven against. `README.md` describes the audit for its users, `demo/README.md` describes the sample app, and `docs/PRD.md` is the plan. What follows is what a worker needs on top of those.
+
+## The audit CLI
+
+The audit tool lives in `src/` (TypeScript, run with `tsx`, entry point `src/cli.ts`, one file per check in `src/checks/`) and its Vitest tests in `test/`. It reads a repo, and with `--db` a database's catalogs, and writes a report; it never changes what it audits. Run it with `npm run audit -- <path> [--db <connection string>] [--out <dir>]`.
+
+## The sample app and its stack
+
+`demo/` is a separate npm package with its own `package.json`, lockfile and `.gitignore`: a Lovable-style booking app for a fictional hair salon (React, Vite, supabase-js). It has its own Supabase stack in `demo/supabase/`, so every Supabase CLI command for it takes `--workdir demo`, run from the repo root: `npx supabase start --workdir demo`, `npx supabase db reset --workdir demo` (rebuilds the database from `demo/supabase/migrations/` and `demo/supabase/seed.sql`), `npx supabase status --workdir demo -o json`, and `npx supabase stop --workdir demo`. The stack runs on the Supabase default ports + 2000: API on 56321, database on 56322, Studio on 56323. Its project id is fixed, so there is one such stack per machine whichever checkout started it; after switching worktrees, reset it from the one you are working in. The app's dev server runs on port 7173 (strict, so a busy port is an error). The app reads `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` from the environment, or from a gitignored `demo/.env.local`. Run it only against the local stack and never deploy it. Seeded staff sign in as `mia@example.com` or `sam@example.com` with the password `salon-demo-password`.
+
+The demo was written with exactly one seeded flaw for each of the audit's checks a to f, each marked with a `FLAW (check x)` comment. The git tag `before` marks that flawed state. `main` holds the fixed app: flaws a to e are repaired by new migrations and code changes, and f, a migration that dropped a column, cannot be undone, so the demo gained a CI step that stops the next one instead. A migration that has been applied is never edited, so the `FLAW` comments in the old migrations stay; `demo/README.md` has the table of flaws and their fixes.
+
+## The reports
+
+The before report is in `case-study/before/` and the after report in `case-study/after/`, each as `report.md` and `report.json`, both written by the tool and never by hand. Both are run from the repo root with the target given as the relative path `demo`, so the report holds no machine-specific path, and with the demo stack's database URL (`DB_URL` from `npx supabase status --workdir demo -o json`, `postgresql://postgres:postgres@127.0.0.1:56322/postgres` on a default stack). The after report is regenerated on `main`, after `npx supabase db reset --workdir demo`, with `npm run audit -- demo --db postgresql://postgres:postgres@127.0.0.1:56322/postgres --out case-study/after`. The before report is regenerated the same way with `--out case-study/before`, but from a checkout of the tag `before`, with the stack reset from that checkout's migrations; reset it again from `main` afterwards. `test/demo.test.ts` pins what the audit finds in the fixed app, so a change to the demo or the checks that moves a finding shows up there.
+
+## Running the tests
+
+Run `npm install` at the root, and `npm install --prefix demo` for the sample app, first.
+
+- `npm run typecheck` typechecks the audit, its tests, and the e2e tests and Playwright config.
+- `npm test` runs the Vitest tests in `src/` and `test/`. The database checks' tests need the demo stack running and its database URL in `TEST_DB_URL`, either exported or as a `TEST_DB_URL=<DB_URL>` line in a gitignored `.env.test` at the repo root. They refuse a URL that is not on `127.0.0.1` or `localhost`, and each test file creates and drops its own randomly named schemas.
+- `npm run typecheck --prefix demo` and `npm run build --prefix demo` typecheck and build the sample app. Vite's warning that the bundle is over 500 kB is expected.
+- `npm run test:e2e` runs the Playwright tests in `e2e/` in headless Chromium. Playwright starts the demo dev server on port 7173 itself and refuses to reuse one already running there. It needs no `demo/.env.local`: it takes `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` from the environment, or from `npx supabase status --workdir demo -o json` when they are unset, and refuses to run unless the URL is on `127.0.0.1` or `localhost`. Run it after `npx supabase db reset --workdir demo`, because the smoke test signs in as a seeded staff account and looks for seeded appointments. It needs the demo's dependencies installed and Playwright's Chromium (`npx playwright install chromium` if this machine has none). Its output goes to `test-results/` and `playwright-report/`, both gitignored.
