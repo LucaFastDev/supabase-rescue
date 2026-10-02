@@ -43,7 +43,7 @@ The client runs it as `postgres` (running it twice is safe), then sets a passwor
 
 ## Start the demo stack
 
-The flawed sample app in `demo/`, its seeded flaws and how to run it are in [demo/README.md](demo/README.md); its before report is in `case-study/before/` and its after report, once fixed, in `case-study/after/`.
+The flawed sample app in `demo/`, its seeded flaws and how to run it are in [demo/README.md](demo/README.md); its before report is in `case-study/before/` and its after report, for the fixed app, in [case-study/after/report.md](case-study/after/report.md).
 
 The demo app's local Supabase stack runs on the default ports + 2000 (API on 56321, database on 56322, Studio on 56323), so it can run alongside other local stacks.
 
