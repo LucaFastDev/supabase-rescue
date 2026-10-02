@@ -5,7 +5,7 @@ import { mask } from '../src/checks/secrets.ts';
 import { main } from '../src/main.ts';
 import { FAKE, commitAll, gitRepo, stripeKey, tempDir, writeFiles } from './repo.ts';
 
-it('runs checks d, e and f, and no report output contains a secret in full', async () => {
+it('runs checks d, e and f, and a without --db, and no report output contains a secret in full', async () => {
   const root = await gitRepo();
   const deleted = stripeKey('Hst1');
   await writeFiles(root, { 'app/scripts/old.ts': `"${deleted}"\n` });
@@ -25,9 +25,9 @@ it('runs checks d, e and f, and no report output contains a secret in full', asy
 
   const markdown = await readFile(path.join(out, 'report.md'), 'utf8');
   const json = await readFile(path.join(out, 'report.json'), 'utf8');
-  expect(markdown).toContain('**Summary:** 9 critical, 0 high, 1 medium, 1 low; 0 to review, 6 manual actions.');
+  expect(markdown).toContain('**Summary:** 9 critical, 0 high, 1 medium, 1 low; 0 to review, 7 manual actions.');
   const checks = JSON.parse(json).findings.map((f: { check: string }) => f.check);
-  expect([...new Set(checks)].sort()).toEqual(['d', 'e', 'f']);
+  expect([...new Set(checks)].sort()).toEqual(['a', 'd', 'e', 'f']);
 
   for (const secret of [...Object.values(FAKE), deleted]) {
     expect(markdown).not.toContain(secret);

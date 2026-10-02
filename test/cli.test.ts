@@ -9,6 +9,7 @@ import { checks } from '../src/checks/index.ts';
 import { main } from '../src/main.ts';
 import type { MainOptions } from '../src/main.ts';
 import { renderJson, renderMarkdown } from '../src/report.ts';
+import { ROLE_SQL } from '../src/rolesql.ts';
 import { RANK_CASES, finding } from './helpers.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -36,8 +37,8 @@ async function run(argv: string[], options: MainOptions = {}) {
 const fixed = (...findings: ReturnType<typeof finding>[]): Check => ({ id: 'a', run: () => findings });
 
 describe('audit', () => {
-  it('registers checks d, e and f, in that order', () => {
-    expect(checks.map((check) => check.id)).toEqual(['d', 'e', 'f']);
+  it('registers checks a to f, in that order', () => {
+    expect(checks.map((check) => check.id)).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
   });
 
   it('with no checks, writes an empty report.md and report.json to --out and exits 0', async () => {
@@ -126,9 +127,9 @@ describe('audit', () => {
 });
 
 describe('role-sql', () => {
-  it('prints a single SQL comment line and exits 0', async () => {
+  it('prints the role SQL and exits 0', async () => {
     const result = await run(['role-sql']);
-    expect(result).toEqual({ code: 0, stdout: '-- role-sql is not implemented yet.\n', stderr: '' });
+    expect(result).toEqual({ code: 0, stdout: ROLE_SQL, stderr: '' });
   });
 });
 
@@ -155,6 +156,6 @@ describe('the cli.ts entry point', () => {
   it('prints role-sql to stdout and exits 0', () => {
     const result = cli('role-sql');
     expect(result.status).toBe(0);
-    expect(result.stdout).toBe('-- role-sql is not implemented yet.\n');
+    expect(result.stdout).toBe(ROLE_SQL);
   });
 });
