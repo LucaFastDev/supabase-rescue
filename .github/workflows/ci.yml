@@ -51,6 +51,16 @@ jobs:
           echo "TEST_DB_URL=$db" >> "$GITHUB_ENV"
       - name: Tests
         run: npm test
+      # The demo app in a browser, against its stack (e2e/). The config reads
+      # the stack's URL and key from supabase status, so no env file is needed.
+      - name: Install the demo app
+        run: npm ci --prefix demo
+      - name: Install the browser
+        run: npx playwright install --with-deps chromium
+      - name: Reset the stack for the end-to-end tests
+        run: supabase db reset --workdir demo
+      - name: End-to-end tests
+        run: npm run test:e2e
       - name: The stack's logs, when something failed
         if: failure()
         run: |
