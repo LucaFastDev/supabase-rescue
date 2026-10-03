@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { defineConfig, devices } from '@playwright/test';
 import { demoStack } from './e2e/demo-stack.ts';
 
@@ -8,7 +9,13 @@ const stack = demoStack();
 process.env.VITE_SUPABASE_URL = stack.url;
 process.env.VITE_SUPABASE_ANON_KEY = stack.anonKey;
 
-const baseURL = 'http://localhost:7173';
+// One port per checkout: E2E_PORT, or one derived from this checkout's path. Set into process.env
+// so Playwright's workers, which load this file again, inherit the same port.
+process.env.E2E_PORT ||= String(
+  20000 + (parseInt(createHash('sha256').update(process.cwd()).digest('hex').slice(0, 8), 16) % 10000),
+);
+const PORT = Number(process.env.E2E_PORT);
+const baseURL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: 'e2e',
@@ -21,11 +28,13 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: 'npm run dev --prefix demo',
+    command: `npm run dev --prefix demo -- --port ${PORT} --strictPort`,
     url: baseURL,
-    // Never test a dev server some other checkout left running: it may hold other code or point
-    // at another stack. Port 7173 is strict, so a busy port fails the run.
-    reuseExistingServer: false,
+    // Reuse is safe: the port is this checkout's own (E2E_PORT or derived from its path), so a
+    // server already on it can only be this checkout's.
+    reuseExistingServer: true,
+    // Show Vite's "Local:" line, so a run's output says which port it used.
+    stdout: 'pipe',
     env: {
       VITE_SUPABASE_URL: stack.url,
       VITE_SUPABASE_ANON_KEY: stack.anonKey,
