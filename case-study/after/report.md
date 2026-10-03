@@ -83,7 +83,7 @@ None.
 
 - **Check:** d
 - **Where:** `src/integrations/supabase/admin.ts:7`
-- **Why:** Rotate this key: it is in the git history at 5cf7438 src/integrations/supabase/admin.ts, and the history keeps it after any fix; the tool cannot see whether you rotated it.
+- **Why:** Rotate this key: it is in the git history at 040f259 src/integrations/supabase/admin.ts, and the history keeps it after any fix; the tool cannot see whether you rotated it.
 - **Fix:** In the Supabase dashboard, Project Settings, API Keys: move to the new publishable and secret keys and disable the legacy JWT-based keys, or roll the JWT secret (which replaces the anon key too). Rewriting the history does not help: every clone and fork already has the key.
 - **Check before applying:** Every place that uses this key (servers, edge functions, CI, local env files), so you can give them the new one before the old one stops working.
 
