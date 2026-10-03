@@ -30,8 +30,9 @@ export default defineConfig({
   webServer: {
     command: `npm run dev --prefix demo -- --port ${PORT} --strictPort`,
     url: baseURL,
-    // Reuse is safe: the port is this checkout's own (E2E_PORT or derived from its path), so a
-    // server already on it can only be this checkout's.
+    // Reuse is nearly always safe: the port is E2E_PORT or a hash of this checkout's path, so a
+    // server already on it is almost always this checkout's. Two checkouts can hash to the same
+    // port, rarely, and then one reuses the other's server.
     reuseExistingServer: true,
     // Show Vite's "Local:" line, so a run's output says which port it used.
     stdout: 'pipe',
