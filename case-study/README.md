@@ -37,7 +37,7 @@ Every fix was made as one tested change to the app ([the fix](https://github.com
 
 The same check found nothing critical, serious or medium. Three kinds of thing are left, and none can be done from the code:
 
-- **Replace the master key in the Supabase dashboard.** A few minutes; the report says where and in what order.
+- **Replace the master key in the Supabase dashboard.** Do it once every place that uses the key has been found; the report says where and in what order.
 - **Five settings in the Supabase dashboard**, such as refusing passwords known from data breaches. The check cannot see them from outside, so the report lists exactly where to click.
 - **The earlier update that broke open tabs stays applied.** It cannot be undone, so it is reported to make sure the next one like it is caught.
 
@@ -49,7 +49,7 @@ A report like the [before report](before/report.md): every problem, how serious 
 
 One package: **analyse and fix.** I check your app and send you the report, so you see every problem and its fix before anything changes. Then I make the fixes myself, as one change to your app, tested against it, like the sample's.
 
-**What I need from you.** Access to your project's GitHub repository, with permission to change it, or I send the changes for you to accept (if your project is not on GitHub yet, Lovable's GitHub integration puts it there). A way to apply the database changes: your own setup, or an invitation to your Supabase organization that you remove afterwards. Optionally, for the check, a read-only login to your database: I send you the one command that creates it, it cannot read your customers' data directly, and you delete it when I am done.
+**What I need from you.** Access to your project's GitHub repository, with permission to change it, or I send the changes for you to accept (if your project is not on GitHub yet, Lovable's GitHub integration puts it there). A way to apply the database changes: your own setup, or an invitation to your Supabase organization that you remove afterwards. Optionally, for the check, **a separate login** to your database with limited access: I send you a short script that creates it, you run it and choose its password, it has no direct access to the rows in your tables, and you delete it when I am done.
 
 <!-- TODO operator: replace UPWORK_PROFILE_URL with the Upwork profile link before this page is shown to anyone. -->
 **[Hire me to check yours](UPWORK_PROFILE_URL)**
