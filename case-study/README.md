@@ -18,9 +18,9 @@ Juniper & Ash Hair Studio is a fictional salon with the kind of app Lovable buil
 | Fill the calendar with fake bookings: in the past, or already marked "confirmed" or "completed". | Critical | The form still takes bookings from anyone, but only for a future time, and only as a new booking. |
 | Type in any phone number and see that person's appointments. | Critical | "Find my booking" is gone. Customers get a booking reference that staff can look up. |
 | Copy the database's master key out of the website's code, and with it read, change or delete everything. | Critical | The key is out of the website. The Customers page now uses the staff member's own sign-in. |
-| Sign up with someone else's email address. | Medium | New accounts must confirm their email. |
+| Sign up with someone else's email address. | Medium | Email confirmation is on in the app's settings file. The same switch in the Supabase dashboard is on the to-do list below. |
 | Open the Reports page without signing in. | Needed a decision: the page might have been meant to be public | Reports are behind the staff sign-in. |
-| (Not a stranger, but the same kind of mistake.) An earlier update deleted the customers' notes column: the notes are gone, and browser tabs already open on the app broke. | Low | Deleted data cannot come back. A new check stops the next update like it before it ships. |
+| (Not a stranger, but the same kind of mistake.) An earlier update removed a column the app still read. The notes in it were moved first, but every browser tab already open on the app broke the moment it ran. | Low | An update that has run cannot be undone. A new check stops the next one like it before it ships. |
 
 ## Why "just ask Lovable to fix it" is risky
 
@@ -39,7 +39,7 @@ The same check found nothing critical, serious or medium. Three kinds of thing a
 
 - **Replace the master key in the Supabase dashboard.** A few minutes; the report says where and in what order.
 - **Five settings in the Supabase dashboard**, such as refusing passwords known from data breaches. The check cannot see them from outside, so the report lists exactly where to click.
-- **The deleted notes stay deleted.** That one is reported so the next update like it is caught.
+- **The earlier update that broke open tabs stays applied.** It cannot be undone, so it is reported to make sure the next one like it is caught.
 
 ## What you get
 
