@@ -31,3 +31,7 @@ vector_port = 56328
 [auth.email]
 # Fixed (check e): on, so nobody can sign up with an email address they do not own.
 enable_confirmations = true
+
+[functions.stripe-webhook]
+# Stripe sends no Supabase token; the function checks Stripe's signature instead.
+verify_jwt = false

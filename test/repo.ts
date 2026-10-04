@@ -85,3 +85,5 @@ export const HARMLESS = {
     'postgresql://' + 'postgres:${DB_PASSWORD}@db.example' + '.com:5432/postgres',
   ],
 };
+
+export const STRIPE_PUBLISHABLE = { test: 'pk_' + 'test_' + filler('Pk1', 24), live: 'pk_' + 'live_' + filler('Pl2', 24) };

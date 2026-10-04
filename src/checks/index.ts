@@ -2,6 +2,7 @@ import type { CheckId, Finding } from '../findings.ts';
 import { authCheck } from './auth.ts';
 import { functionsCheck } from './functions.ts';
 import { migrationsCheck } from './migrations.ts';
+import { paymentsCheck } from './payments.ts';
 import { policiesCheck } from './policies.ts';
 import { rlsCheck } from './rls.ts';
 import { secretsCheck } from './secrets.ts';
@@ -20,5 +21,5 @@ export interface Check {
   run(context: CheckContext): Finding[] | Promise<Finding[]>;
 }
 
-/** Every check the audit runs, in order: the database checks a to c, then the repo checks d to f. */
-export const checks: Check[] = [rlsCheck, policiesCheck, functionsCheck, secretsCheck, authCheck, migrationsCheck];
+/** Every check the audit runs, in order: the database checks a to c, then the repo checks d to g. */
+export const checks: Check[] = [rlsCheck, policiesCheck, functionsCheck, secretsCheck, authCheck, migrationsCheck, paymentsCheck];
