@@ -45,13 +45,11 @@ The same check found nothing critical, serious or medium. Three kinds of thing a
 
 A report like the [before report](before/report.md): every problem, how serious it is, why it matters, the fix, and what to check before applying it. The [after report](after/report.md) is the same check run again once the fixes are in.
 
-## Three ways to work together
+## How we work together
 
-1. **Analyse.** I check your app and tell you what is wrong and how serious each problem is.
-2. **Analyse and suggest.** The same, plus the exact fix for each problem and what to test after it, ready for you, your developer or Lovable to apply.
-3. **Fix.** I make the fixes myself, as one change to your app, tested against it, like the sample's.
+One package: **analyse and fix.** I check your app and send you the report, so you see every problem and its fix before anything changes. Then I make the fixes myself, as one change to your app, tested against it, like the sample's.
 
-**What I need from you.** For Analyse and for Analyse and suggest: read access to your project's GitHub repository (if your project is not on GitHub yet, Lovable's GitHub integration puts it there). Optionally, a read-only login to your database so I can check its access rules too: I send you the one command that creates it, it cannot read your customers' data directly, and you delete it when I am done. For Fix: permission to change the repository (or I send the changes for you to accept), and a way to apply database changes, either your own setup or an invitation to your Supabase organization that you remove afterwards.
+**What I need from you.** Access to your project's GitHub repository, with permission to change it, or I send the changes for you to accept (if your project is not on GitHub yet, Lovable's GitHub integration puts it there). A way to apply the database changes: your own setup, or an invitation to your Supabase organization that you remove afterwards. Optionally, for the check, a read-only login to your database: I send you the one command that creates it, it cannot read your customers' data directly, and you delete it when I am done.
 
 <!-- TODO operator: replace UPWORK_PROFILE_URL with the Upwork profile link before this page is shown to anyone. -->
 **[Hire me to check yours](UPWORK_PROFILE_URL)**
