@@ -40,10 +40,7 @@ A small booking app (customers, appointments, staff notes) in `demo/`, hand-writ
 
 ## 3. The fix and the case study
 
-The flawed app lands on `main` first and is tagged `before`. The fix lands as one real pull request, migrations and code, the way a client would receive it; the case study links it as the exhibit. After it, the audit finds nothing critical, high or medium. The case study (`case-study/README.md`) shows the before report, the fix, the after report, and a "What access to give" section in three tiers:
-
-1. **Analyse** and 2. **analyse and suggest** need the same access: read access to the repo, plus optionally the audit role from `role-sql` (no direct access to any table's rows).
-3. **Fix** needs more: write access to the repo (or a pull request from a fork) and a way to apply migrations, either the client's own pipeline or a member role in their Supabase organization.
+The flawed app lands on `main` first and is tagged `before`. The fix lands as one real pull request, migrations and code, the way a client would receive it; the case study links it as the exhibit. After it, the audit finds nothing critical, high or medium. The case study (`case-study/README.md`) shows the before report, the fix, the after report, and how the client works with the operator. There is one offer, analyse and fix (the operator does not sell analysis alone, decided 2026-10-04): the client sees the report, then receives the fixes as one pull request tested against their app. It needs write access to the repo (or a pull request from a fork), a way to apply migrations (the client's own pipeline or a member role in their Supabase organization), and optionally the audit role from `role-sql` (no direct access to any table's rows).
 
 ## Acceptance criteria
 
