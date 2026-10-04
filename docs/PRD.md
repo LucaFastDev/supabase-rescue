@@ -1,10 +1,10 @@
 # supabase-rescue — PRD
 
-Agreed with the operator on 2026-10-02 (request c7eccdd8).
+Agreed with the operator on 2026-10-02 (request c7eccdd8). The scope was extended on 2026-10-04 (request bd573d60-d535-43da-936c-731b50dd870a).
 
 ## Goal
 
-A repo, LucaFastDev/supabase-rescue (private while built; public under MIT at launch), holding three things: an audit tool that finds the security and production gaps typical of apps built with Lovable, Bolt or Cursor on Supabase; a deliberately flawed sample booking app it is proven against; and a before/after case study written for clients.
+A repo, LucaFastDev/supabase-rescue (private while built; public under MIT at launch), holding three things: an audit tool that finds the database security gaps (the headline) and the launch gaps typical of apps built with Lovable, Bolt or Cursor on Supabase; a deliberately flawed sample booking app it is proven against; and a before/after case study written for clients.
 
 ## 1. The audit tool
 
@@ -18,7 +18,7 @@ A Node/TypeScript command-line tool, run from a checkout of this repo.
 
 ### Report
 
-Each finding has: the check (a to f), a severity (critical, high, medium, low), a title, where it is (file and line, or a database object), why it matters in plain words, the suggested fix with a SQL or code snippet, and what to check before applying it. Two kinds of entry are not severities and never change the exit code: **review** (something a static read cannot decide, for a person to look at) and **manual** (an action the tool cannot see the result of, such as rotating a key, or a setting it cannot read). `report.md` opens with counts per severity, then sections Critical, High, Medium, Low, Review and Manual actions.
+Each finding has: the check (a to k), a severity (critical, high, medium, low), a title, where it is (file and line, or a database object), why it matters in plain words, the suggested fix with a SQL or code snippet, and what to check before applying it. Two kinds of entry are not severities and never change the exit code: **review** (something a static read cannot decide, for a person to look at) and **manual** (an action the tool cannot see the result of, such as rotating a key, or a setting it cannot read). The checks run a to k, in the one audit, one `report.md` and one `report.json`, under the one exit-code rule. `report.md` will open with a short plain-language summary for the owner, before the counts per severity, and then has the sections Critical, High, Medium, Low, Review and Manual actions. The summary is a change to the report renderer and has its own issue.
 
 ### Checks and severities
 
@@ -34,25 +34,41 @@ e. **Auth gaps.** Email confirmation off in `config.toml`: medium. A route that 
 
 f. **Migration not backward-compatible.** A migration that drops a table or column, renames one, or adds NOT NULL without a default, porting the logic of ai-hq's `scripts/check-migration.mjs`: low, because an applied migration cannot be undone; the fix is a migration check in the client's CI, given as a snippet.
 
+### Launch checks
+
+Database security stays the headline; checks g to k extend the audit to what else a Lovable-made app needs before it goes live for real. They share the one audit, report and exit-code rule: there is no separate tool and no separate report for them. Each check's severities are set by that check's own issue and written into this subsection when the check lands; none are set yet.
+
+g. **Payments (Stripe).** An amount or price trusted from the browser. A webhook handler that does not verify Stripe's signature. A Stripe test key in env meant for a live app. Automated, from the repo.
+
+h. **Paid APIs anyone can run up.** An edge function callable without sign-in (`verify_jwt = false` in `config.toml`) that calls a paid API with no limit. AI keys in frontend code are already check d and are not repeated here. Automated, from the repo.
+
+i. **Auth email deliverability.** Supabase's built-in SMTP is for testing only, at about 2 emails an hour, so sign-up and reset emails stop after launch. The check is custom SMTP plus the domain's SPF, DKIM and DMARC. Partly manual, because a domain's DNS records are not in the repo.
+
+j. **Backups and plan.** The free plan keeps no backups and pauses after a week without activity. This is a manual action only: the tool cannot see the project's plan.
+
+k. **Storage buckets.** A bucket that is public but holds private files, read from the catalogs. Automated, and needs `--db`.
+
 ## 2. The sample app
 
-A small booking app (customers, appointments, staff notes) in `demo/`, hand-written in Lovable's usual stack: React, Vite, Tailwind with shadcn/ui, supabase-js, with migrations and seed data that run on the local Supabase stack in `demo/supabase/`. It carries exactly one seeded flaw per check a to f, so the before report finds every one.
+A small booking app (customers, appointments, staff notes) in `demo/`, hand-written in Lovable's usual stack: React, Vite, Tailwind with shadcn/ui, supabase-js, with migrations and seed data that run on the local Supabase stack in `demo/supabase/`. It carries exactly one seeded flaw per check a to k, so the before report finds every one. For check g it has a small Stripe test-mode checkout and webhook with fake keys and no Stripe account: the audit only reads code, its tests use Stripe's own offline signature helper, and nothing ever takes a payment.
 
 ## 3. The fix and the case study
 
-The flawed app lands on `main` first and is tagged `before`. The fix lands as one real pull request, migrations and code, the way a client would receive it; the case study links it as the exhibit. After it, the audit finds nothing critical, high or medium. The case study (`case-study/README.md`) shows the before report, the fix, the after report, and how the client works with the operator. There is one offer, analyse and fix (the operator does not sell analysis alone, decided 2026-10-04): the client sees the report, then receives the fixes as one pull request tested against their app. It needs write access to the repo (or a pull request from a fork), a way to apply migrations (the client's own pipeline or a member role in their Supabase organization), and optionally the audit role from `role-sql` (no direct access to any table's rows).
+The flawed app lands on `main` first and is tagged `before`. The fix lands as one real pull request, migrations and code, the way a client would receive it; the case study links it as the exhibit. After it, the audit finds nothing critical, high or medium.
+
+The launch checks extend this, and the demo on `main` is already the fixed app by then, so the story holds in five steps. First, each launch check lands on `main` with its flawed demo feature, so `main` temporarily shows the new flaws. Second, one "launch fixes" pull request fixes them all, as PR #10 did for the database flaws. Third, at the end one commit carries every flaw, the new ones plus the database ones from the `before` tag, and the operator moves `before` to it. Fourth, both reports are regenerated, once and not after each check, from `before` and from `main`. Fifth, the case study keeps one before report, one after report and one table, and links both fix pull requests, PR #10 and the "launch fixes" pull request, as its two fix exhibits. The case study (`case-study/README.md`) shows the before report, the fix, the after report, and how the client works with the operator. There is one offer, analyse and fix (the operator does not sell analysis alone, decided 2026-10-04): the client sees the report, then receives the fixes as one pull request tested against their app. It needs write access to the repo (or a pull request from a fork), a way to apply migrations (the client's own pipeline or a member role in their Supabase organization), and optionally the audit role from `role-sql` (no direct access to any table's rows).
 
 ## Acceptance criteria
 
-- Each check a to f has a test with a fixture that triggers it and one that does not.
-- Against the flawed sample app (`demo/` and its local database), the audit reports exactly one finding with a severity for each check a to f, plus the review entry for the unguarded route; the before report is committed.
-- Against the fixed app: nothing critical, high or medium, no review entries, and the manual actions are only the key rotation (the key stays in the history) and the fixed list of dashboard auth checks; the after report is committed.
+- Each check a to k has a test with a fixture that triggers it and one that does not.
+- Against the flawed sample app (`demo/` and its local database), the audit reports exactly one finding with a severity for each check a to k, plus the review entry for the unguarded route; the before report is committed. Check j is a manual action, so it is listed under Manual actions and not counted as a finding with a severity.
+- Against the fixed app: nothing critical, high or medium, no review entries, and the manual actions are only the key rotation (the key stays in the history), the fixed list of dashboard auth checks, and the backups and plan item of check j, which like the dashboard auth checks is a manual action the tool cannot see the result of; the after report is committed.
 - In CI, the `role-sql` output is applied to the local stack, the audit runs with that role, and a test shows the role cannot write to or read a row of any app table directly, and that the tool's own connection cannot write even as the superuser.
 - CI runs on the operator's Mac while the repo is private.
 
 ## Out of scope
 
-Applying anything to a live database; writing fix migrations; generating or opening the fix PR in a client's repo automatically; publishing to npm; a web UI; the portfolio-site entry (a separate task once the repo is public); making the repo public and moving its CI to GitHub's runners (the operator's, at launch).
+Applying anything to a live database; writing fix migrations; generating or opening the fix PR in a client's repo automatically; publishing to npm; a web UI; the portfolio-site entry (a separate task once the repo is public); making the repo public and moving its CI to GitHub's runners (the operator's, at launch). Also out of scope: SEO and monitoring, and legal or GDPR wording. Later, not now: a check for queries that never page through results and silently stop at Supabase's 1,000-row default.
 
 ## Order of work
 
@@ -62,3 +78,8 @@ Applying anything to a live database; writing fix migrations; generating or open
 4. The flawed sample app and the before report; tag `before`.
 5. The fix pull request and the after report.
 6. The case study.
+7. Each launch check g to k, with its demo flaw, its check and its case-study row.
+8. The owner summary in the renderer.
+9. The "launch fixes" pull request.
+10. The all-flaws commit and moving the `before` tag (the operator's).
+11. Regenerating both reports.
