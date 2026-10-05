@@ -1,7 +1,7 @@
-// Pins the fixed sample app, which on main also carries check g's seeded flaw until the launch
-// fixes land: the audit of demo/ with --db on the demo stack finds two findings with a severity,
-// the critical for that flaw and the low for the column check f's migration dropped (an applied
-// migration cannot be undone), no review entry, and as manual entries the dashboard auth checks plus one rotation of
+// Pins the fixed sample app, which on main also carries check g's and check h's seeded flaws until
+// the launch fixes land: the audit of demo/ with --db on the demo stack finds three findings with a
+// severity, the critical for g, the high for h and the low for the column check f's migration
+// dropped (an applied migration cannot be undone), no review entry, and as manual entries the dashboard auth checks plus one rotation of
 // the service-role key the git history keeps. It also checks what the fixed policies let each
 // role do, and the booking page's reference. It leaves nothing behind: the report goes to a
 // temporary directory, and every statement run as a role is rolled back.
@@ -40,23 +40,28 @@ describe('the audit of demo/, on the demo stack', () => {
 
   const isFixture = (f: Finding) => 'object' in f.location && isTestFixtureObject(f.location.object);
 
-  it("runs, and exits 1 because of check g's seeded flaw alone", () => {
+  it("runs, and exits 1 because of checks g and h's seeded flaws alone", () => {
     expect(stderr).toBe('');
     // Other test files, running at the same time, can have a fixture table without RLS in public,
-    // which the audit sees as critical. Those, and check g's seeded flaw, are the only findings
-    // allowed to raise the exit code.
+    // which the audit sees as critical. Those, and check g's and check h's seeded flaws, are the
+    // only findings allowed to raise the exit code.
     const raising = all.filter((f) => f.severity === 'critical' || f.severity === 'high');
-    expect(raising.filter((f) => !isFixture(f)).map(summary)).toEqual([['g', 'critical', 'supabase/functions/create-checkout/index.ts']]);
+    expect(raising.filter((f) => !isFixture(f)).map(summary)).toEqual([
+      ['g', 'critical', 'supabase/functions/create-checkout/index.ts'],
+      ['h', 'high', 'supabase/functions/summarise-weeks/index.ts'],
+    ]);
     expect(code).toBe(raising.length === 0 ? 0 : 1);
   });
 
-  it("finds the critical for check g's seeded flaw and the low for the applied migration that dropped a column", () => {
+  it("finds the critical for check g's seeded flaw, the high for check h's and the low for the applied migration that dropped a column", () => {
     expect(findings.filter((f) => f.severity !== undefined).map(summary)).toEqual([
       ['g', 'critical', 'supabase/functions/create-checkout/index.ts'],
+      ['h', 'high', 'supabase/functions/summarise-weeks/index.ts'],
       ['f', 'low', 'supabase/migrations/20260915110000_staff_notes.sql'],
     ]);
     expect(findings.find((f) => f.check === 'f')!.title).toBe('Migration drops a column');
     expect(findings.find((f) => f.check === 'g')!.title).toBe('Stripe charges an amount the browser sent');
+    expect(findings.find((f) => f.check === 'h')!.title).toBe('Anyone can run up your OpenAI bill through the summarise-weeks edge function');
   });
 
   it('gives no review entry', () => {

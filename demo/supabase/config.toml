@@ -35,3 +35,6 @@ enable_confirmations = true
 [functions.stripe-webhook]
 # Stripe sends no Supabase token; the function checks Stripe's signature instead.
 verify_jwt = false
+
+[functions.summarise-weeks]
+verify_jwt = false

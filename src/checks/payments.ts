@@ -20,7 +20,7 @@ const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** The text with every comment line (starting with //, /* or *) emptied, so line numbers hold. */
-function withoutComments(src: string): string[] {
+export function withoutComments(src: string): string[] {
   return src.split('\n').map((line) => (/^\s*(?:\/\/|\/\*|\*)/.test(line) ? '' : line));
 }
 
