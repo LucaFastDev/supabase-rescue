@@ -166,7 +166,7 @@ export function scanText(file: string, text: string): Occurrence[] {
   return [...bySecret.values()];
 }
 
-async function git(cwd: string, args: string[]): Promise<string> {
+export async function git(cwd: string, args: string[]): Promise<string> {
   // LC_ALL=C keeps git's messages in English, so inGitRepo can read them.
   const env = { ...process.env, LC_ALL: 'C' };
   const { stdout } = await execFileAsync('git', args, { cwd, env, encoding: 'utf8', maxBuffer: MAX_GIT_OUTPUT });
@@ -174,7 +174,7 @@ async function git(cwd: string, args: string[]): Promise<string> {
 }
 
 /** True when `cwd` is inside a git work tree. Throws when git cannot answer. */
-async function inGitRepo(cwd: string): Promise<boolean> {
+export async function inGitRepo(cwd: string): Promise<boolean> {
   try {
     return (await git(cwd, ['rev-parse', '--is-inside-work-tree'])).trim() === 'true';
   } catch (error) {
@@ -187,7 +187,7 @@ async function inGitRepo(cwd: string): Promise<boolean> {
 }
 
 /** The text of a file worth scanning, or undefined when it is not a regular file, too big or binary. */
-async function readScannable(full: string): Promise<string | undefined> {
+export async function readScannable(full: string): Promise<string | undefined> {
   const info = await lstat(full).catch((error: NodeJS.ErrnoException) => {
     // Tracked but deleted from the working tree.
     if (error.code === 'ENOENT') return undefined;

@@ -2,7 +2,7 @@
 
 A small booking app for a fictional hair salon, written the way a fresh Lovable project is: React, Vite, TypeScript, Tailwind with shadcn/ui, supabase-js and React Router. The audit in the root of this repo is proven against it.
 
-**It was built deliberately insecure, then fixed.** The tag `before` carries exactly one seeded flaw for each of the audit's checks a to f, each marked in the code with a `FLAW (check x)` comment. The fix pull request repairs a to e with new migrations and code changes. The flaw comments in the migrations that were already applied stay, because an applied migration is never edited; each new migration names the flaw it fixes. Flaw f stays too: the migration that dropped `customers.notes` cannot be undone, so the fix adds a CI step that stops the next one. Run the app only against the local stack. Never deploy it.
+**It was built deliberately insecure, then fixed.** The tag `before` carries exactly one seeded flaw for each of the audit's checks a to f, each marked in the code with a `FLAW (check x)` comment. The fix pull request repairs a to e with new migrations and code changes. The flaw comments in the migrations that were already applied stay, because an applied migration is never edited; each new migration names the flaw it fixes. Flaw f stays too: the migration that dropped `customers.notes` cannot be undone, so the fix adds a CI step that stops the next one. Check g's flaw, the checkout that trusts the booking page's price, is on `main` until the launch fixes pull request repairs it. Run the app only against the local stack. Never deploy it.
 
 | Check | The flaw | Where | Fixed by |
 |---|---|---|---|
@@ -12,6 +12,7 @@ A small booking app for a fictional hair salon, written the way a fresh Lovable 
 | d | The local stack's service-role key in a `supabaseAdmin` client the Customers page uses | `src/integrations/supabase/admin.ts` | The file is deleted and Customers uses the anon-key client; the key stays in the git history, so it must be rotated |
 | e | `enable_confirmations = false` under `[auth.email]`, and the Reports route has no auth check | `supabase/config.toml`, `src/App.tsx` | Confirmations on; `/reports` moved inside `ProtectedRoute` |
 | f | A migration drops `customers.notes` | `supabase/migrations/20260915110000_staff_notes.sql` | Not undoable; `.github/workflows/migrations-check.yml` fails a pull request that adds such a migration |
+| g | The checkout trusts the price the booking page sends | `supabase/functions/create-checkout/index.ts` | the launch fixes pull request (not yet) |
 
 Pages: a public "Book an appointment" form that gives a booking reference (`/`), staff sign in (`/login`), Appointments (with each booking's reference), Customers, a customer's detail with their appointments, staff notes per customer, and Reports (appointments per week).
 
@@ -44,5 +45,7 @@ npm run dev        # http://localhost:7173
 npm run typecheck
 npm run build
 ```
+
+The two edge functions in `supabase/functions/` (`create-checkout` and `stripe-webhook`) need `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` only to run them, which the audit and the tests never do.
 
 Sign in as staff with `mia@example.com` or `sam@example.com`, password `salon-demo-password` (seeded by `supabase/seed.sql`). Every name, phone number and email address in the seed data is made up.

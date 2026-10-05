@@ -5,13 +5,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
-import { SERVICES, bookingReference } from "@/lib/types";
+import { SERVICES, SERVICE_PRICES, bookingReference, type Service } from "@/lib/types";
+
+const pounds = (pence: number) => `£${(pence / 100).toFixed(2)}`;
 
 const Book = () => {
   const [signedIn, setSignedIn] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [reference, setReference] = useState<string | null>(null);
+  const [booked, setBooked] = useState<{ id: string; service: Service } | null>(null);
+  const [paying, setPaying] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSignedIn(data.session !== null));
@@ -24,6 +28,7 @@ const Book = () => {
     setSubmitting(true);
     setMessage(null);
     setReference(null);
+    setBooked(null);
     // The id is made here, because visitors may add a booking but not read one back.
     const id = crypto.randomUUID();
     const { error } = await supabase.from("appointments").insert({
@@ -39,8 +44,25 @@ const Book = () => {
       setMessage(`Sorry, that did not work: ${error.message}`);
       return;
     }
+    const service = String(form.get("service"));
     formElement.reset();
     setReference(bookingReference(id));
+    setBooked({ id, service: service as Service });
+  };
+
+  const pay = async () => {
+    if (!booked) return;
+    setPaying(true);
+    setMessage(null);
+    const { data, error } = await supabase.functions.invoke("create-checkout", {
+      body: { appointmentId: booked.id, service: booked.service, price: SERVICE_PRICES[booked.service] },
+    });
+    setPaying(false);
+    if (error) {
+      setMessage(`Sorry, that did not work: ${error.message}`);
+      return;
+    }
+    window.location.assign(data.url);
   };
 
   return (
@@ -108,6 +130,11 @@ const Book = () => {
                   Your booking reference is <span className="font-mono font-semibold text-foreground">{reference}</span>.
                   Quote it if you call us about this booking.
                 </p>
+                {booked && (
+                  <Button className="mt-3" type="button" onClick={pay} disabled={paying}>
+                    {paying ? "Opening checkout…" : `Pay now (${pounds(SERVICE_PRICES[booked.service])})`}
+                  </Button>
+                )}
               </div>
             )}
           </CardContent>

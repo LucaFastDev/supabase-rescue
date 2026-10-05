@@ -1,4 +1,15 @@
 export const SERVICES = ["Cut and finish", "Blow-dry", "Colour", "Balayage", "Beard trim", "Kids cut"] as const;
+export type Service = (typeof SERVICES)[number];
+
+/** What each service costs, in pence. */
+export const SERVICE_PRICES: Record<Service, number> = {
+  "Cut and finish": 4500,
+  "Blow-dry": 3000,
+  Colour: 7500,
+  Balayage: 12000,
+  "Beard trim": 1500,
+  "Kids cut": 2000,
+};
 
 export const STATUSES = ["booked", "confirmed", "completed", "cancelled"] as const;
 export type Status = (typeof STATUSES)[number];
