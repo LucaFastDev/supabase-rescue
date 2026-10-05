@@ -11,6 +11,8 @@ export interface SupabaseConfig {
   apiSchemas: string[];
   /** `[auth.email] enable_confirmations`, when it is written. */
   enableConfirmations?: { value: boolean; line: number };
+  /** Every `[functions.<name>]` with `verify_jwt = false`, in file order; absent when there is none. */
+  publicFunctions?: { name: string; line: number }[];
 }
 
 /**
@@ -42,6 +44,11 @@ export async function readConfig(repoPath: string): Promise<SupabaseConfig | und
   if (typeof confirmations === 'boolean') {
     config.enableConfirmations = { value: confirmations, line: lineOfKey(text, 'auth.email', 'enable_confirmations') };
   }
+  const functions = table(toml.functions);
+  const publicFunctions = Object.entries(functions ?? {})
+    .filter(([, value]) => table(value)?.verify_jwt === false)
+    .map(([name]) => ({ name, line: lineOfKey(text, `functions.${name}`, 'verify_jwt') }));
+  if (publicFunctions.length > 0) config.publicFunctions = publicFunctions;
   return config;
 }
 

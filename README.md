@@ -26,6 +26,7 @@ The checks that read only the repo:
 - **e. Auth gaps:** email confirmation off in `supabase/config.toml`, React Router routes in `src/` that render data without an auth check, and the dashboard auth settings to check by hand.
 - **f. Migrations:** statements in `supabase/migrations/*.sql` that are not backward-compatible with the deployed app (drops, renames, type changes, new required columns, truncates).
 - **g. Payments (Stripe):** a Stripe checkout or payment amount taken from the request body, a Stripe webhook handler that never verifies Stripe's signature, and a Stripe test publishable key in a production env file (`.env.production`, `.env.prod`), in the files git tracks under `<path>`.
+- **h. Paid APIs:** an edge function that `supabase/config.toml` opens to anyone (`verify_jwt = false`), that checks no signed-in user, and that calls a paid API such as OpenAI, Anthropic, Resend or Twilio, in the files git tracks under `<path>`.
 
 ## The audit role (`role-sql`)
 

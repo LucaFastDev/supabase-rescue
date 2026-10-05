@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -20,6 +21,8 @@ function weekStart(iso: string): string {
 const Reports = () => {
   const [weeks, setWeeks] = useState<WeekCount[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<string | null>(null);
+  const [summarising, setSummarising] = useState(false);
 
   useEffect(() => {
     supabase
@@ -44,6 +47,18 @@ const Reports = () => {
       });
   }, []);
 
+  const summarise = async () => {
+    setSummarising(true);
+    setError(null);
+    const { data, error } = await supabase.functions.invoke("summarise-weeks", { body: { weeks } });
+    setSummarising(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setSummary(data.summary);
+  };
+
   return (
     <div className="grid gap-4">
       <h1 className="text-2xl font-semibold">Reports</h1>
@@ -65,6 +80,10 @@ const Reports = () => {
           ))}
         </TableBody>
       </Table>
+      <Button disabled={weeks.length === 0 || summarising} onClick={summarise} className="justify-self-start">
+        Summarise with AI
+      </Button>
+      {summary && <p className="text-sm">{summary}</p>}
     </div>
   );
 };

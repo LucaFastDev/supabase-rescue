@@ -36,11 +36,11 @@ f. **Migration not backward-compatible.** A migration that drops a table or colu
 
 ### Launch checks
 
-Database security stays the headline; checks g to k extend the audit to what else a Lovable-made app needs before it goes live for real. They share the one audit, report and exit-code rule: there is no separate tool and no separate report for them. Each check's severities are set by that check's own issue and written into this subsection when the check lands; g's are set below, and h to k's are not yet.
+Database security stays the headline; checks g to k extend the audit to what else a Lovable-made app needs before it goes live for real. They share the one audit, report and exit-code rule: there is no separate tool and no separate report for them. Each check's severities are set by that check's own issue and written into this subsection when the check lands; g's and h's are set below, and i to k's are not yet.
 
 g. **Payments (Stripe).** Three findings. An amount passed to Stripe that comes from the request body, so the browser's price is trusted (critical). A webhook handler that does not verify Stripe's signature (critical). A Stripe test publishable key (`pk_test_`) in a production env file, which is `.env.production`, `.env.prod` or one of those with a further suffix (high); `sk_test_` secret keys stay with check d. Automated, from the repo.
 
-h. **Paid APIs anyone can run up.** An edge function callable without sign-in (`verify_jwt = false` in `config.toml`) that calls a paid API with no limit. AI keys in frontend code are already check d and are not repeated here. Automated, from the repo.
+h. **Paid APIs anyone can run up.** One finding: an edge function that `config.toml` makes callable without sign-in (`verify_jwt = false`), that checks no signed-in user in its own code, and that calls a known paid API (AI, email or SMS providers, listed in the check): high. Whether something else limits it is for the reader to check, as the finding's "check before" says, because a static read cannot see a rate limit. Stripe is check g's. AI keys in frontend code are already check d and are not repeated here. Automated, from the repo.
 
 i. **Auth email deliverability.** Supabase's built-in SMTP is for testing only, at about 2 emails an hour, so sign-up and reset emails stop after launch. The check is custom SMTP plus the domain's SPF, DKIM and DMARC. Partly manual, because a domain's DNS records are not in the repo.
 
@@ -50,7 +50,7 @@ k. **Storage buckets.** A bucket that is public but holds private files, read fr
 
 ## 2. The sample app
 
-A small booking app (customers, appointments, staff notes) in `demo/`, hand-written in Lovable's usual stack: React, Vite, Tailwind with shadcn/ui, supabase-js, with migrations and seed data that run on the local Supabase stack in `demo/supabase/`. It carries exactly one seeded flaw per check a to k, so the before report finds every one. For check g it has a small Stripe test-mode checkout and webhook with fake keys and no Stripe account: the audit only reads code, the audit only reads that code, and no test runs the functions, and nothing ever takes a payment.
+A small booking app (customers, appointments, staff notes) in `demo/`, hand-written in Lovable's usual stack: React, Vite, Tailwind with shadcn/ui, supabase-js, with migrations and seed data that run on the local Supabase stack in `demo/supabase/`. It carries exactly one seeded flaw per check a to k, so the before report finds every one. For check g it has a small Stripe test-mode checkout and webhook with fake keys and no Stripe account: the audit only reads that code, and no test runs the functions, and nothing ever takes a payment.
 
 ## 3. The fix and the case study
 

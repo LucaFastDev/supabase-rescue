@@ -30,6 +30,16 @@ describe('readConfig', () => {
     expect(await readConfig(await withConfig('[db]\nport = 54322\n'))).toEqual({ apiSchemas: [] });
   });
 
+  it('lists the functions with verify_jwt = false, with the line of that key', async () => {
+    const toml = '[functions.a]\nverify_jwt = false\n\n[functions.b]\nverify_jwt = true\n\n[functions.c]\nimport_map = "x"\n';
+    expect((await readConfig(await withConfig(toml)))?.publicFunctions).toEqual([{ name: 'a', line: 2 }]);
+  });
+
+  it('has no publicFunctions key when every function has verify_jwt on', async () => {
+    const config = await readConfig(await withConfig('[functions.b]\nverify_jwt = true\n'));
+    expect(config).not.toHaveProperty('publicFunctions');
+  });
+
   it('throws, naming the file, when it is not valid TOML', async () => {
     await expect(readConfig(await withConfig('[api\nschemas = '))).rejects.toThrow(/^supabase\/config\.toml is not valid TOML: /);
   });
