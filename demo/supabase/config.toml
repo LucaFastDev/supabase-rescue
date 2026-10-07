@@ -28,6 +28,10 @@ inspector_port = 10083
 port = 56327
 vector_port = 56328
 
+[auth]
+site_url = "http://localhost:7173"
+additional_redirect_urls = ["http://localhost:7173/reset-password"]
+
 [auth.email]
 # Fixed (check e): on, so nobody can sign up with an email address they do not own.
 enable_confirmations = true

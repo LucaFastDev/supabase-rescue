@@ -8,6 +8,7 @@ import Customers from "@/pages/Customers";
 import Login from "@/pages/Login";
 import NotFound from "@/pages/NotFound";
 import Reports from "@/pages/Reports";
+import ResetPassword from "@/pages/ResetPassword";
 import StaffNotes from "@/pages/StaffNotes";
 
 const App = () => (
@@ -15,6 +16,7 @@ const App = () => (
     <Routes>
       <Route path="/" element={<Book />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<StaffLayout />}>
           <Route path="/appointments" element={<Appointments />} />

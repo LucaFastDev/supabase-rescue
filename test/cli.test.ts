@@ -37,8 +37,8 @@ async function run(argv: string[], options: MainOptions = {}) {
 const fixed = (...findings: ReturnType<typeof finding>[]): Check => ({ id: 'a', run: () => findings });
 
 describe('audit', () => {
-  it('registers checks a to h, in that order', () => {
-    expect(checks.map((check) => check.id)).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']);
+  it('registers checks a to i, in that order', () => {
+    expect(checks.map((check) => check.id)).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']);
   });
 
   it('with no checks, writes an empty report.md and report.json to --out and exits 0', async () => {
