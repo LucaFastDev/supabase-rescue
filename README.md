@@ -28,6 +28,7 @@ The checks that read only the repo:
 - **g. Payments (Stripe):** a Stripe checkout or payment amount taken from the request body, a Stripe webhook handler that never verifies Stripe's signature, and a Stripe test publishable key in a production env file (`.env.production`, `.env.prod`), in the files git tracks under `<path>`.
 - **h. Paid APIs:** an edge function that `supabase/config.toml` opens to anyone (`verify_jwt = false`), that checks no signed-in user, and that calls a paid API such as OpenAI, Anthropic, Resend or Twilio, in the files git tracks under `<path>`.
 - **i. Auth email:** code that asks Supabase to send auth emails (sign-up, password reset, sign-in link, invitation) while `supabase/config.toml` sets up no SMTP server of its own, in the files git tracks under `<path>`, and, in every report, two checks by hand: custom SMTP in the dashboard, and the sending domain's SPF, DKIM and DMARC records.
+- **j. Backups and plan:** always listed, in every report, as one check by hand: that the project is on a paid plan, with daily backups, because the free plan keeps no backups and pauses a project after a week without activity, and the tool cannot see which plan the project is on.
 
 ## The audit role (`role-sql`)
 

@@ -1,6 +1,7 @@
 import type { CheckId, Finding } from '../findings.ts';
 import { authEmailCheck } from './auth-email.ts';
 import { authCheck } from './auth.ts';
+import { backupsCheck } from './backups.ts';
 import { functionsCheck } from './functions.ts';
 import { migrationsCheck } from './migrations.ts';
 import { paidApisCheck } from './paid-apis.ts';
@@ -23,7 +24,7 @@ export interface Check {
   run(context: CheckContext): Finding[] | Promise<Finding[]>;
 }
 
-/** Every check the audit runs, in order: the database checks a to c, then the repo checks d to i. */
+/** Every check the audit runs, in order: the database checks a to c, then the repo checks d to j. */
 export const checks: Check[] = [
   rlsCheck,
   policiesCheck,
@@ -34,4 +35,5 @@ export const checks: Check[] = [
   paymentsCheck,
   paidApisCheck,
   authEmailCheck,
+  backupsCheck,
 ];

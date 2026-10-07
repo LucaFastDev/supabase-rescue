@@ -2,10 +2,11 @@
 // flaws until the launch fixes land: the audit of demo/ with --db on the demo stack finds four
 // findings with a severity, the critical for g, the highs for h and i and the low for the column
 // check f's migration dropped (an applied migration cannot be undone), no review entry, and as
-// manual entries the dashboard auth checks, check i's two auth email checks and one rotation of
-// the service-role key the git history keeps. It also checks what the fixed policies let each
-// role do, and the booking page's reference. It leaves nothing behind: the report goes to a
-// temporary directory, and every statement run as a role is rolled back.
+// manual entries the dashboard auth checks, check i's two auth email checks, check j's backups and
+// plan check and one rotation of the service-role key the git history keeps. It also checks what
+// the fixed policies let each role do, and the booking page's reference. It leaves nothing
+// behind: the report goes to a temporary directory, and every statement run as a role is rolled
+// back.
 
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -15,6 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { bookingReference } from '../demo/src/lib/types.ts';
 import { AUTH_EMAIL_MANUAL_CHECKS } from '../src/checks/auth-email.ts';
 import { MANUAL_CHECKS } from '../src/checks/auth.ts';
+import { BACKUPS_MANUAL_CHECKS } from '../src/checks/backups.ts';
 import { CI_SCRIPT } from '../src/checks/migrations.ts';
 import type { Finding } from '../src/findings.ts';
 import { main } from '../src/main.ts';
@@ -73,12 +75,12 @@ describe('the audit of demo/, on the demo stack', () => {
     expect(findings.filter((f) => f.kind === 'review')).toEqual([]);
   });
 
-  it('lists as manual actions the dashboard auth checks, the two auth email checks and one rotation of the key in the history', () => {
+  it('lists as manual actions the dashboard auth checks, the two auth email checks, the backups and plan check and one rotation of the key in the history', () => {
     const titles = findings.filter((f) => f.kind === 'manual').map((f) => f.title);
     const rotations = titles.filter((t) => t.startsWith('Rotate the'));
     expect(rotations).toHaveLength(1);
     expect(rotations[0]).toMatch(/^Rotate the Supabase service-role key .* found in the git history$/);
-    expect(titles.filter((t) => !t.startsWith('Rotate the')).sort()).toEqual([...MANUAL_CHECKS, ...AUTH_EMAIL_MANUAL_CHECKS].map((f) => f.title).sort());
+    expect(titles.filter((t) => !t.startsWith('Rotate the')).sort()).toEqual([...MANUAL_CHECKS, ...AUTH_EMAIL_MANUAL_CHECKS, ...BACKUPS_MANUAL_CHECKS].map((f) => f.title).sort());
   });
 });
 

@@ -36,7 +36,7 @@ f. **Migration not backward-compatible.** A migration that drops a table or colu
 
 ### Launch checks
 
-Database security stays the headline; checks g to k extend the audit to what else a Lovable-made app needs before it goes live for real. They share the one audit, report and exit-code rule: there is no separate tool and no separate report for them. Each check's severities are set by that check's own issue and written into this subsection when the check lands; g's, h's and i's are set below, and j's and k's are not yet.
+Database security stays the headline; checks g to k extend the audit to what else a Lovable-made app needs before it goes live for real. They share the one audit, report and exit-code rule: there is no separate tool and no separate report for them. Each check's severities are set by that check's own issue and written into this subsection when the check lands; g's, h's and i's are set below, j has none because it is a manual action only, and k's are not yet set.
 
 g. **Payments (Stripe).** Three findings. An amount passed to Stripe that comes from the request body, so the browser's price is trusted (critical). A webhook handler that does not verify Stripe's signature (critical). A Stripe test publishable key (`pk_test_`) in a production env file, which is `.env.production`, `.env.prod` or one of those with a further suffix (high); `sk_test_` secret keys stay with check d. Automated, from the repo.
 
@@ -44,7 +44,7 @@ h. **Paid APIs anyone can run up.** One finding: an edge function that `config.t
 
 i. **Auth email deliverability.** One finding: the app's code asks Supabase to send an auth email (`signUp`, `resetPasswordForEmail`, `signInWithOtp`, `resend` or `inviteUserByEmail`) and `config.toml` sets up no custom SMTP (no enabled `[auth.email.smtp]` with a host): high. A repo with no `config.toml` gets no finding. Supabase's built-in email service is for testing only, at about 2 emails an hour and only to the project's team members, so sign-up and reset emails stop reaching real users after launch. The live project's SMTP setting and the sending domain's SPF, DKIM and DMARC records are not in the repo, so every report lists them as two **manual** checks. The fix names Resend as an example and says any SMTP provider works. Automated, from the repo, plus two manual checks.
 
-j. **Backups and plan.** The free plan keeps no backups and pauses after a week without activity. This is a manual action only: the tool cannot see the project's plan.
+j. **Backups and plan.** The free plan keeps no backups and pauses after a week without activity. This is a manual action only: the tool cannot see the project's plan. Every report lists it as one **manual** action titled "The project is on a paid plan, with daily backups".
 
 k. **Storage buckets.** A bucket that is public but holds private files, read from the catalogs. Automated, and needs `--db`.
 
@@ -60,7 +60,7 @@ The launch checks extend this, and the demo on `main` is already the fixed app b
 
 ## Acceptance criteria
 
-- Each check a to k has a test with a fixture that triggers it and one that does not.
+- Each check a to k has a test with a fixture that triggers it and one that does not. Check j, a manual action only, has neither, and is tested by listing its entry in every case instead.
 - Against the flawed sample app (`demo/` and its local database), the audit reports exactly one finding with a severity for each check a to k, plus the review entry for the unguarded route; the before report is committed. Check j is a manual action, so it is listed under Manual actions and not counted as a finding with a severity.
 - Against the fixed app: nothing critical, high or medium, no review entries, and the manual actions are only the key rotation (the key stays in the history), the fixed list of dashboard auth checks, check i's two auth email checks (custom SMTP in the dashboard, and the sending domain's SPF, DKIM and DMARC), and the backups and plan item of check j, which like the dashboard auth checks is a manual action the tool cannot see the result of; the after report is committed.
 - In CI, the `role-sql` output is applied to the local stack, the audit runs with that role, and a test shows the role cannot write to or read a row of any app table directly, and that the tool's own connection cannot write even as the superuser.
