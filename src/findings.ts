@@ -1,6 +1,6 @@
 // The finding model, as defined in the "Report" section of docs/PRD.md.
 
-export const CHECK_IDS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'] as const;
+export const CHECK_IDS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'] as const;
 export type CheckId = (typeof CHECK_IDS)[number];
 
 export const SEVERITIES = ['critical', 'high', 'medium', 'low'] as const;
