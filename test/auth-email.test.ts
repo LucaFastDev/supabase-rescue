@@ -47,7 +47,7 @@ describe('authEmailCalls', () => {
     expect(authEmailCalls('/*\n * supabase.auth.resetPasswordForEmail(email)\n */')).toEqual([]);
   });
 
-  it.each(['', '\0\0', '}{)(', 'const { = ', 'supabase.auth.signUp(', 'const x = req.body\n'.repeat(3), 'import x from "'])(
+  it.each(['', '\0\0', '}{)(', 'const { = ', 'stripe.prices.create({ amount: [', 'const x = req.body\n'.repeat(3), 'import x from "'])(
     'does not throw on %j',
     (text) => {
       expect(() => authEmailCalls(text)).not.toThrow();
