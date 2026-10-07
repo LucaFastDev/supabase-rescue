@@ -25,9 +25,9 @@ it('runs checks d, e and f, and a without --db, and no report output contains a 
 
   const markdown = await readFile(path.join(out, 'report.md'), 'utf8');
   const json = await readFile(path.join(out, 'report.json'), 'utf8');
-  expect(markdown).toContain('**Summary:** 9 critical, 0 high, 1 medium, 1 low; 0 to review, 7 manual actions.');
+  expect(markdown).toContain('**Summary:** 9 critical, 0 high, 1 medium, 1 low; 0 to review, 9 manual actions.');
   const checks = JSON.parse(json).findings.map((f: { check: string }) => f.check);
-  expect([...new Set(checks)].sort()).toEqual(['a', 'd', 'e', 'f']);
+  expect([...new Set(checks)].sort()).toEqual(['a', 'd', 'e', 'f', 'i']);
 
   for (const secret of [...Object.values(FAKE), deleted]) {
     expect(markdown).not.toContain(secret);

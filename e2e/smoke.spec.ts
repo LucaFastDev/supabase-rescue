@@ -52,3 +52,19 @@ test('staff sign in and see the seeded appointments', async ({ page }) => {
 
   expect(problems).toEqual([]);
 });
+
+test('the sign-in page offers a password reset, and the reset page renders', async ({ page }) => {
+  const problems = watchForProblems(page);
+  await page.goto('/login');
+
+  await expect(page.getByRole('button', { name: 'Forgot your password?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Forgot your password?' }).click();
+  await expect(page.getByText('Enter your email address first.')).toBeVisible();
+
+  await page.goto('/reset-password');
+  await expect(page.getByLabel('New password')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save new password' })).toBeEnabled();
+  await page.waitForLoadState('networkidle');
+
+  expect(problems).toEqual([]);
+});

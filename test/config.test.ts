@@ -40,6 +40,19 @@ describe('readConfig', () => {
     expect(config).not.toHaveProperty('publicFunctions');
   });
 
+  it('reads the host of an enabled [auth.email.smtp] as smtpHost', async () => {
+    const toml = '[auth.email.smtp]\nenabled = true\nhost = "smtp.resend.com"\nport = 465\n';
+    expect((await readConfig(await withConfig(toml)))?.smtpHost).toBe('smtp.resend.com');
+  });
+
+  it.each([
+    { name: 'a disabled [auth.email.smtp]', toml: '[auth.email.smtp]\nenabled = false\nhost = "smtp.resend.com"\n' },
+    { name: 'a blank host', toml: '[auth.email.smtp]\nhost = "  "\n' },
+    { name: 'only [local_smtp]', toml: '[local_smtp]\nport = 56324\n' },
+  ])('has no smtpHost key for $name', async ({ toml }) => {
+    expect(await readConfig(await withConfig(toml))).not.toHaveProperty('smtpHost');
+  });
+
   it('throws, naming the file, when it is not valid TOML', async () => {
     await expect(readConfig(await withConfig('[api\nschemas = '))).rejects.toThrow(/^supabase\/config\.toml is not valid TOML: /);
   });
