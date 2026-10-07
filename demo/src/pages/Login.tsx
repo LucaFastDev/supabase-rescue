@@ -11,7 +11,26 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const forgotPassword = async () => {
+    setError(null);
+    setNotice(null);
+    if (!email) {
+      setError("Enter your email address first.");
+      return;
+    }
+    // FLAW (check i): config.toml sets up no SMTP server, so this reset email goes through Supabase's built-in email service, which sends about 2 emails an hour and only to the project's own team, so a real staff member who forgets their password never gets the link.
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setNotice("If that address has a staff account, a link to set a new password is on its way.");
+  };
 
   const signIn = async (event: FormEvent) => {
     event.preventDefault();
@@ -53,6 +72,10 @@ const Login = () => {
             <Button type="submit" disabled={loading}>
               {loading ? "Signing in…" : "Sign in"}
             </Button>
+            <Button type="button" variant="link" onClick={forgotPassword}>
+              Forgot your password?
+            </Button>
+            {notice && <p className="text-sm text-muted-foreground">{notice}</p>}
           </form>
         </CardContent>
       </Card>

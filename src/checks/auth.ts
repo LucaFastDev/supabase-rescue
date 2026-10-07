@@ -50,7 +50,7 @@ function confirmationsOff(line: number): Finding {
 
 const PROVIDERS_EMAIL = 'Supabase dashboard: Authentication > Sign In / Providers > Email';
 const ATTACK_PROTECTION = 'Supabase dashboard: Authentication > Attack Protection';
-const NOT_READABLE = "The tool cannot read the live project's auth settings without the Management API, which it never uses.";
+export const NOT_READABLE = "The tool cannot read the live project's auth settings without the Management API, which it never uses.";
 
 export const MANUAL_CHECKS: Finding[] = [
   {

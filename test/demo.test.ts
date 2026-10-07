@@ -1,7 +1,8 @@
-// Pins the fixed sample app, which on main also carries check g's and check h's seeded flaws until
-// the launch fixes land: the audit of demo/ with --db on the demo stack finds three findings with a
-// severity, the critical for g, the high for h and the low for the column check f's migration
-// dropped (an applied migration cannot be undone), no review entry, and as manual entries the dashboard auth checks plus one rotation of
+// Pins the fixed sample app, which on main also carries check g's, check h's and check i's seeded
+// flaws until the launch fixes land: the audit of demo/ with --db on the demo stack finds four
+// findings with a severity, the critical for g, the highs for h and i and the low for the column
+// check f's migration dropped (an applied migration cannot be undone), no review entry, and as
+// manual entries the dashboard auth checks, check i's two auth email checks and one rotation of
 // the service-role key the git history keeps. It also checks what the fixed policies let each
 // role do, and the booking page's reference. It leaves nothing behind: the report goes to a
 // temporary directory, and every statement run as a role is rolled back.
@@ -12,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { bookingReference } from '../demo/src/lib/types.ts';
+import { AUTH_EMAIL_MANUAL_CHECKS } from '../src/checks/auth-email.ts';
 import { MANUAL_CHECKS } from '../src/checks/auth.ts';
 import { CI_SCRIPT } from '../src/checks/migrations.ts';
 import type { Finding } from '../src/findings.ts';
@@ -40,40 +42,43 @@ describe('the audit of demo/, on the demo stack', () => {
 
   const isFixture = (f: Finding) => 'object' in f.location && isTestFixtureObject(f.location.object);
 
-  it("runs, and exits 1 because of checks g and h's seeded flaws alone", () => {
+  it("runs, and exits 1 because of checks g, h and i's seeded flaws alone", () => {
     expect(stderr).toBe('');
     // Other test files, running at the same time, can have a fixture table without RLS in public,
-    // which the audit sees as critical. Those, and check g's and check h's seeded flaws, are the
-    // only findings allowed to raise the exit code.
+    // which the audit sees as critical. Those, and check g's, check h's and check i's seeded flaws,
+    // are the only findings allowed to raise the exit code.
     const raising = all.filter((f) => f.severity === 'critical' || f.severity === 'high');
     expect(raising.filter((f) => !isFixture(f)).map(summary)).toEqual([
       ['g', 'critical', 'supabase/functions/create-checkout/index.ts'],
       ['h', 'high', 'supabase/functions/summarise-weeks/index.ts'],
+      ['i', 'high', 'src/pages/Login.tsx'],
     ]);
     expect(code).toBe(raising.length === 0 ? 0 : 1);
   });
 
-  it("finds the critical for check g's seeded flaw, the high for check h's and the low for the applied migration that dropped a column", () => {
+  it("finds the critical for check g's seeded flaw, the highs for checks h's and i's and the low for the applied migration that dropped a column", () => {
     expect(findings.filter((f) => f.severity !== undefined).map(summary)).toEqual([
       ['g', 'critical', 'supabase/functions/create-checkout/index.ts'],
       ['h', 'high', 'supabase/functions/summarise-weeks/index.ts'],
+      ['i', 'high', 'src/pages/Login.tsx'],
       ['f', 'low', 'supabase/migrations/20260915110000_staff_notes.sql'],
     ]);
     expect(findings.find((f) => f.check === 'f')!.title).toBe('Migration drops a column');
     expect(findings.find((f) => f.check === 'g')!.title).toBe('Stripe charges an amount the browser sent');
     expect(findings.find((f) => f.check === 'h')!.title).toBe('Anyone can run up your OpenAI bill through the summarise-weeks edge function');
+    expect(findings.find((f) => f.check === 'i' && f.severity === 'high')!.title).toBe("Auth emails go through Supabase's built-in email service, which is for testing only");
   });
 
   it('gives no review entry', () => {
     expect(findings.filter((f) => f.kind === 'review')).toEqual([]);
   });
 
-  it('lists as manual actions the dashboard auth checks and one rotation of the key in the history', () => {
+  it('lists as manual actions the dashboard auth checks, the two auth email checks and one rotation of the key in the history', () => {
     const titles = findings.filter((f) => f.kind === 'manual').map((f) => f.title);
     const rotations = titles.filter((t) => t.startsWith('Rotate the'));
     expect(rotations).toHaveLength(1);
     expect(rotations[0]).toMatch(/^Rotate the Supabase service-role key .* found in the git history$/);
-    expect(titles.filter((t) => !t.startsWith('Rotate the')).sort()).toEqual(MANUAL_CHECKS.map((f) => f.title).sort());
+    expect(titles.filter((t) => !t.startsWith('Rotate the')).sort()).toEqual([...MANUAL_CHECKS, ...AUTH_EMAIL_MANUAL_CHECKS].map((f) => f.title).sort());
   });
 });
 

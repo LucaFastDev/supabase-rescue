@@ -13,6 +13,8 @@ export interface SupabaseConfig {
   enableConfirmations?: { value: boolean; line: number };
   /** Every `[functions.<name>]` with `verify_jwt = false`, in file order; absent when there is none. */
   publicFunctions?: { name: string; line: number }[];
+  /** `[auth.email.smtp] host`, when that table is not turned off with `enabled = false`; absent when no custom SMTP is set up. */
+  smtpHost?: string;
 }
 
 /**
@@ -49,6 +51,10 @@ export async function readConfig(repoPath: string): Promise<SupabaseConfig | und
     .filter(([, value]) => table(value)?.verify_jwt === false)
     .map(([name]) => ({ name, line: lineOfKey(text, `functions.${name}`, 'verify_jwt') }));
   if (publicFunctions.length > 0) config.publicFunctions = publicFunctions;
+  const smtp = table(table(table(toml.auth)?.email)?.smtp);
+  if (smtp && typeof smtp.host === 'string' && smtp.host.trim() !== '' && smtp.enabled !== false) {
+    config.smtpHost = smtp.host;
+  }
   return config;
 }
 
