@@ -18,8 +18,16 @@ const fakes = vi.hoisted(() => ({
   appointments: new Map<string, { id: string; service: string }>(),
   /** Every createClient call: the key and the Authorization header it was given. */
   clients: [] as { key: string; authorization: string | undefined }[],
-  /** The access token Auth knows as a signed-in user. */
-  userToken: 'signed-in-staff-token',
+  /** The access token Auth knows as a signed-in user who has a row in public.staff. */
+  staffToken: 'signed-in-staff-token',
+  /** The access token Auth knows as a signed-in user with no staff row, as anyone who signs up is. */
+  strangerToken: 'signed-in-stranger-token',
+  /** The user ids with a row in public.staff. */
+  staff: new Set(['staff-user']),
+  /** Every lookup in public.staff: the client's key and Authorization header, and the filters it used. */
+  staffLookups: [] as { key: string; authorization: string | undefined; filters: Record<string, string> }[],
+  /** When set, the lookup in public.staff answers with this error and no data. */
+  staffError: null as { message: string } | null,
 }));
 
 vi.mock('npm:stripe@23', () => ({
@@ -39,23 +47,31 @@ vi.mock('npm:@supabase/supabase-js@2', () => ({
   createClient: (_url: string, key: string, options?: { global?: { headers?: Record<string, string> } }) => {
     const authorization = options?.global?.headers?.Authorization;
     fakes.clients.push({ key, authorization });
+    // As Auth answers: a user for a signed-in user's token, none for the anon key or no token.
+    const userId =
+      authorization === `Bearer ${fakes.staffToken}` ? 'staff-user' : authorization === `Bearer ${fakes.strangerToken}` ? 'stranger-user' : null;
     return {
-      // As Auth answers: a user for a signed-in user's token, none for the anon key or no token.
       auth: {
-        getUser: async () => ({
-          data: { user: authorization === `Bearer ${fakes.userToken}` ? { id: 'staff-user' } : null },
-          error: null,
-        }),
+        getUser: async () => ({ data: { user: userId ? { id: userId } : null }, error: null }),
       },
       from: (table: string) => {
-        let id: string | undefined;
+        const filters: Record<string, string> = {};
         const query = {
           select: () => query,
           eq: (column: string, value: string) => {
-            if (column === 'id') id = value;
+            filters[column] = value;
             return query;
           },
-          maybeSingle: async () => ({ data: table === 'appointments' ? (fakes.appointments.get(id!) ?? null) : null, error: null }),
+          maybeSingle: async () => {
+            if (table === 'staff') {
+              fakes.staffLookups.push({ key, authorization, filters });
+              if (fakes.staffError) return { data: null, error: fakes.staffError };
+              // As RLS answers on the caller's token: their own staff row, if they have one, and no one else's.
+              const visible = userId !== null && filters.user_id === userId && fakes.staff.has(userId);
+              return { data: visible ? { user_id: userId } : null, error: null };
+            }
+            return { data: table === 'appointments' ? (fakes.appointments.get(filters.id!) ?? null) : null, error: null };
+          },
         };
         return query;
       },
@@ -160,7 +176,16 @@ describe('summarise-weeks', () => {
   beforeEach(() => {
     openai.mockClear();
     fakes.clients.length = 0;
+    fakes.staffLookups.length = 0;
+    fakes.staffError = null;
   });
+
+  const expectStaffOnly = async (response: Response) => {
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'Staff only' });
+    expect(response.headers.get('Content-Type')).toBe('application/json');
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+  };
 
   const WEEKS = { weeks: [{ week: '2026-10-05', bookings: 12 }] };
 
@@ -178,11 +203,32 @@ describe('summarise-weeks', () => {
     expect(openai).not.toHaveBeenCalled();
   });
 
+  it('answers 403 to a signed-in user who is not staff, and does not call OpenAI', async () => {
+    const response = await handler(post(WEEKS, { Authorization: `Bearer ${fakes.strangerToken}` }));
+    await expectStaffOnly(response);
+    expect(openai).not.toHaveBeenCalled();
+    // It looked for the caller's own staff row with the anon key and the caller's token, not the service-role key.
+    expect(fakes.staffLookups).toEqual([
+      { key: ENV.SUPABASE_ANON_KEY, authorization: `Bearer ${fakes.strangerToken}`, filters: { user_id: 'stranger-user' } },
+    ]);
+  });
+
+  it('answers 403 to a staff user when the staff lookup fails, and does not call OpenAI', async () => {
+    fakes.staffError = { message: 'connection refused' };
+    const response = await handler(post(WEEKS, { Authorization: `Bearer ${fakes.staffToken}` }));
+    await expectStaffOnly(response);
+    expect(openai).not.toHaveBeenCalled();
+  });
+
   it('summarises for a signed-in user', async () => {
-    const response = await handler(post(WEEKS, { Authorization: `Bearer ${fakes.userToken}` }));
+    const response = await handler(post(WEEKS, { Authorization: `Bearer ${fakes.staffToken}` }));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ summary: 'A busy fortnight.' });
     expect(openai).toHaveBeenCalledTimes(1);
     expect(String((openai.mock.calls[0] as unknown[])[0])).toBe('https://api.openai.com/v1/chat/completions');
+    // The user is staff: it found their row with their own token.
+    expect(fakes.staffLookups).toEqual([
+      { key: ENV.SUPABASE_ANON_KEY, authorization: `Bearer ${fakes.staffToken}`, filters: { user_id: 'staff-user' } },
+    ]);
   });
 });
