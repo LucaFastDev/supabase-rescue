@@ -90,7 +90,7 @@ const KIND_TEXT: Record<SecretKind, { label: string; impact: string; rotate: str
     label: 'Supabase service-role key',
     impact: 'It bypasses every row level security policy: whoever holds it can read, change and delete every row in the database.',
     rotate:
-      'In the Supabase dashboard, Project Settings, API Keys: move to the new publishable and secret keys and disable the legacy JWT-based keys, or roll the JWT secret (which replaces the anon key too).',
+      'In the Supabase dashboard, Project Settings, API Keys: move everything that uses the legacy anon and service_role keys to the new publishable and secret keys, then disable the legacy keys. Disabling them does not stop this key: it still works when sent as an Authorization: Bearer token. To stop it, in Project Settings, JWT Keys, move to the new JWT signing keys, then revoke the legacy JWT secret. If you keep the legacy keys instead, roll the legacy JWT secret, which replaces the anon key too.',
   },
   'sb-secret': {
     label: 'Supabase secret key',

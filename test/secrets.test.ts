@@ -63,6 +63,15 @@ describe('check d on current files', () => {
     expect(await run(root)).toEqual([]);
   });
 
+  it('tells the owner of a committed service-role key that disabling the legacy keys does not stop it', async () => {
+    const root = await gitRepo();
+    await writeFiles(root, { 'src/config.ts': `export const key = "${FAKE.serviceRoleJwt}";\n` });
+    commitAll(root, 'add a key');
+    const [finding] = await run(root);
+    expect(finding!.fix!.text).toContain('revoke the legacy JWT secret');
+    expect(finding!.fix!.text).toContain('Authorization: Bearer');
+  });
+
   it('is critical in frontend files and high elsewhere, never frontend under supabase/', async () => {
     const root = await tempDir();
     await writeFiles(root, {
@@ -216,6 +225,19 @@ describe('check d on the history', () => {
     expect((await run(path.join(root, 'app'))).map((f) => f.why)).toEqual([
       `Rotate this key: it is in the git history at ${sha} x.ts, and the history keeps it after any fix; the tool cannot see whether you rotated it.`,
     ]);
+  });
+
+  it('tells the owner of a deleted service-role key that disabling the legacy keys does not stop it', async () => {
+    const root = await gitRepo();
+    await writeFiles(root, { 'app/src/config.ts': `export const key = "${FAKE.serviceRoleJwt}";\n` });
+    commitAll(root, 'add a key');
+    await rm(path.join(root, 'app/src/config.ts'));
+    commitAll(root, 'delete the key');
+
+    const [manual] = await run(path.join(root, 'app'));
+    expect(manual!.kind).toBe('manual');
+    expect(manual!.fix!.text).toContain('revoke the legacy JWT secret');
+    expect(manual!.fix!.text).toContain('Authorization: Bearer');
   });
 
   it('gives nothing for a history without secrets', async () => {
