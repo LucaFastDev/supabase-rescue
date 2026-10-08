@@ -58,6 +58,7 @@ function finding(file: string, line: number, emails: string): Finding {
   return {
     check: 'i',
     severity: 'high',
+    owner: 'Sign-up and password-reset emails will stop arriving once real people use the app.',
     title: "Auth emails go through Supabase's built-in email service, which is for testing only",
     location: { file, line },
     why: `This line asks Supabase to send an auth email, and supabase/config.toml sets up no SMTP server of your own, so the app's ${emails} emails go through Supabase's built-in email service. That service is for testing only: it sends about 2 emails an hour, and only to the addresses of your Supabase project's team members. Once real users arrive, these emails do not reach them, so anything that waits on one, such as confirming an account or resetting a password, stops working.`,

@@ -37,6 +37,7 @@ function confirmationsOff(line: number): Finding {
   return {
     check: 'e',
     severity: 'medium',
+    owner: 'New accounts are not asked to confirm their email address.',
     title: 'Email confirmation is off in config.toml',
     location: { file: CONFIG_FILE, line },
     why: 'enable_confirmations = false lets anyone sign up with an email address they do not own and use the account at once. This file configures the local stack and can be pushed to the live project with supabase config push, so it is often what production runs with too.',

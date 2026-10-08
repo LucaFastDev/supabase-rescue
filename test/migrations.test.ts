@@ -79,6 +79,7 @@ describe('check f', () => {
     ]);
     const [drop] = findings;
     expect(drop!.check).toBe('f');
+    expect(findings.map((f) => f.owner)).toEqual(Array(2).fill('A database change could break the live app while it updates.'));
     expect(drop!.why).toContain(RULES.find((r) => r.id === 'drop-column')!.message);
     expect(drop!.fix.snippet?.language).toBe('yaml');
     expect(drop!.fix.snippet?.code).toContain('runs-on: ubuntu-latest');

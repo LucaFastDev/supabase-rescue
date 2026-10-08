@@ -96,6 +96,8 @@ describe('authEmailCheck', () => {
       check: 'i',
       title: "Auth emails go through Supabase's built-in email service, which is for testing only",
     });
+    expect(first!.owner).toBe('Sign-up and password-reset emails will stop arriving once real people use the app.');
+    expect(findings.slice(1).every((f) => f.kind === 'manual' && !('owner' in f))).toBe(true);
     expect(first!.why).toContain("the app's password reset emails");
     expect(first!.fix?.snippet?.code).toContain('[auth.email.smtp]');
     expect(first!.checkBefore).not.toBe('');

@@ -168,6 +168,7 @@ function amountFinding(file: string, line: number): Finding {
   return {
     check: 'g',
     severity: 'critical',
+    owner: 'A customer can pay €1 for a €100 booking.',
     title: 'Stripe charges an amount the browser sent',
     location: { file, line },
     why: "The amount on this line comes from the request body, which the visitor's browser sends and anyone can change. A customer can pay 1 EUR for a 100 EUR booking, and Stripe reports the payment as complete.",
@@ -184,6 +185,7 @@ function webhookFinding(file: string, line: number): Finding {
   return {
     check: 'g',
     severity: 'critical',
+    owner: 'Anyone can mark an order as paid without paying.',
     title: "Stripe webhook handler does not verify Stripe's signature",
     location: { file, line },
     why: 'This file acts on Stripe events, such as a completed checkout, but never calls stripe.webhooks.constructEvent or constructEventAsync, which checks the Stripe-Signature header. Anyone who finds the URL can post a fake "paid" event, and the booking or order is marked as paid without a payment.',
@@ -200,6 +202,7 @@ function testKeyFinding(file: string, key: string, line: number): Finding {
   return {
     check: 'g',
     severity: 'high',
+    owner: 'Your live checkout uses a Stripe test key, so it takes no real money.',
     title: `Stripe test publishable key ${mask(key)} in a production env file`,
     location: { file, line },
     why: `${file} configures the production build, and it sets a Stripe test-mode key. In test mode the checkout looks normal but no real money moves, so customers' bookings or orders go through unpaid.`,

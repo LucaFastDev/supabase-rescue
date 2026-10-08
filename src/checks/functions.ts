@@ -83,6 +83,13 @@ const TEXT: Record<FunctionProblemId, ProblemText> = {
   },
 };
 
+const OWNER: Record<FunctionProblemId, string> = {
+  'definer-anon': 'Anyone on the internet can run a database function with full rights.',
+  'definer-authenticated': 'Any signed-in user can run a database function with full rights.',
+  'no-search-path': 'A database function could be tricked into running the wrong code.',
+  'invoker-anon': 'Anyone can call one of your database functions.',
+};
+
 function exposedFunction(fn: FunctionRow, problems: FunctionProblem[]): Finding {
   const name = `${fn.schema}.${fn.name}(${fn.args})`;
   const signature = `${qualified(fn.schema, fn.name)}(${fn.args})`;
@@ -91,6 +98,7 @@ function exposedFunction(fn: FunctionRow, problems: FunctionProblem[]): Finding 
   return {
     check: 'c',
     severity: problems[0]!.severity,
+    owner: OWNER[problems[0]!.id],
     title: texts[0]!.title(name),
     location: { object: name },
     why: several ? texts.map((t, i) => `${i + 1}. ${t.why}`).join(' ') : texts[0]!.why,

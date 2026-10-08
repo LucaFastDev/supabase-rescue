@@ -35,7 +35,10 @@ interface FindingBase {
 }
 
 export type Finding = FindingBase &
-  ({ severity: Severity; kind?: never } | { kind: Kind; severity?: never });
+  (
+    | { severity: Severity; owner: string; kind?: never }
+    | { kind: Kind; owner?: never; severity?: never }
+  );
 
 /** The six report sections, in report order. */
 export const RANKS = [...SEVERITIES, ...KINDS] as const;

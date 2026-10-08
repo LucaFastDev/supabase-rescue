@@ -100,6 +100,7 @@ describe('check c: exposed functions, on the demo stack', () => {
     expect(finding).toMatchObject({
       check: 'c',
       severity: 'critical',
+      owner: 'Anyone on the internet can run a database function with full rights.',
       title: `Function ${fx.schema}.definer_open(integer, text) runs with its owner's rights and anyone can call it`,
       location: { object: `${fx.schema}.definer_open(integer, text)` },
     });
@@ -117,12 +118,13 @@ describe('check c: exposed functions, on the demo stack', () => {
   it('reports a definer only signed-in users can execute as high', () => {
     const [finding] = at('definer_signed_in()');
     expect(finding?.severity).toBe('high');
+    expect(finding!.owner).toBe('Any signed-in user can run a database function with full rights.');
     expect(finding!.fix.snippet!.code).toContain(`revoke execute on function ${fx.schema}.definer_signed_in() from authenticated;`);
   });
 
   it('reports an invoker anon can execute as low', () => {
     const [finding] = at('invoker_open(uuid)');
-    expect(finding).toMatchObject({ severity: 'low', title: `Anyone can call function ${fx.schema}.invoker_open(uuid)` });
+    expect(finding).toMatchObject({ severity: 'low', owner: 'Anyone can call one of your database functions.', title: `Anyone can call function ${fx.schema}.invoker_open(uuid)` });
     expect(finding!.why).toMatch(/row level security still applies/);
   });
 
@@ -137,5 +139,6 @@ describe('check c: exposed functions, on the demo stack', () => {
     expect(inSchema(findings, hidden).map((f) => [f.location, f.severity])).toEqual([
       [{ object: `${hidden}.definer_hidden()` }, 'medium'],
     ]);
+    expect(inSchema(findings, hidden)[0]!.owner).toBe('A database function could be tricked into running the wrong code.');
   });
 });

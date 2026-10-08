@@ -85,6 +85,7 @@ function finding(name: string, configLine: number, file: string, line: number, a
   return {
     check: 'h',
     severity: 'high',
+    owner: 'Anyone on the internet can run up your bill with a paid service.',
     title: `Anyone can run up your ${apis} bill through the ${name} edge function`,
     location: { file, line },
     why: `supabase/config.toml line ${configLine} sets verify_jwt = false for ${name}, and the function checks no signed-in user, so it runs for any request from anyone. This line calls ${apis}, which bills your account for every call. Anyone who finds the function's address, which the app's own code shows, can call it in a loop and run up the bill, or use up your quota so the feature stops working for your users.`,

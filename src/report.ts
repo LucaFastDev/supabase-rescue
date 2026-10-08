@@ -30,6 +30,7 @@ export function renderMarkdown(findings: readonly Finding[], meta: ReportMeta): 
   const lines = [
     '# Audit report',
     '',
+    ...ownerSummary(sorted, count),
     `**Summary:** ${count('critical')} critical, ${count('high')} high, ${count('medium')} medium, ` +
       `${count('low')} low; ${count('review')} to review, ${count('manual')} manual actions.`,
     '',
@@ -50,6 +51,43 @@ export function renderMarkdown(findings: readonly Finding[], meta: ReportMeta): 
   }
 
   return `${lines.join('\n')}\n`;
+}
+
+/** The plain-language opening for the business owner, each block followed by an empty line. */
+function ownerSummary(sorted: readonly Finding[], count: (rank: Rank) => number): string[] {
+  const severe = count('critical') + count('high') > 0;
+  const minor = count('medium') + count('low') > 0;
+  const lines = [
+    severe
+      ? "**Not ready to launch yet:** these problems could expose your customers' data or cost you money."
+      : minor
+        ? '**Nearly ready:** nothing urgent, but fix these before you grow.'
+        : '**No problems found in what this tool can read.**',
+    '',
+  ];
+
+  const sentences = [...new Set(sorted.flatMap((f) => (f.owner === undefined ? [] : [f.owner])))].slice(0, 3);
+  if (sentences.length > 0) lines.push(...sentences.map((s) => `- ${s}`), '');
+
+  const review = count('review');
+  if (review > 0) {
+    lines.push(
+      review === 1
+        ? '1 thing needs a person to look at, listed under Review.'
+        : `${review} things need a person to look at, listed under Review.`,
+      '',
+    );
+  }
+  const manual = count('manual');
+  if (manual > 0) {
+    lines.push(
+      manual === 1
+        ? "1 thing this tool can't see needs checking by hand, listed under Manual actions."
+        : `${manual} things this tool can't see need checking by hand, listed under Manual actions.`,
+      '',
+    );
+  }
+  return lines;
 }
 
 function renderFinding(finding: Finding): string[] {

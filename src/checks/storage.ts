@@ -67,6 +67,7 @@ function publicBucket(bucket: BucketRow, restricting: readonly StoragePolicyRow[
   return {
     check: 'k',
     severity: 'high',
+    owner: 'Files you meant to keep private can be opened by anyone who has their link.',
     title: 'Public storage bucket with a read policy that does not protect its files',
     location: { object: `storage.buckets/${bucket.id}` },
     why: `The bucket ${bucket.id} is public, and the read ${policies} who may read its files. A public bucket lets anyone who has a file's URL download it, whatever the policies say: storage policies only control what the API lists and returns, not the public URL. So anyone a link reaches, or who guesses one, can open these files, though the policy makes them look private.`,

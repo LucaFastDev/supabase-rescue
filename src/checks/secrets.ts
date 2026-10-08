@@ -263,6 +263,9 @@ function currentFinding(file: string, { secret, line, exposure }: Occurrence): F
   return {
     check: 'd',
     severity: exposure ? 'critical' : 'high',
+    owner: exposure
+      ? "A secret key ships to every visitor's browser, so anyone can use it."
+      : 'A secret key is saved in your code repository.',
     title: `${label} ${mask(secret.value)} ${where}`,
     location: { file, line },
     why: `${exposure ?? 'Anyone who can read this repository, or any copy of it, has this key.'} ${impact}`,
