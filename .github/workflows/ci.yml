@@ -38,7 +38,7 @@ jobs:
       # The sample app's stack (demo/supabase). The database checks' tests use
       # it too, through TEST_DB_URL. Only the database, auth and the API run.
       - name: Start the local stack
-        run: supabase start --workdir demo -x realtime,storage-api,imgproxy,mailpit,studio,edge-runtime,logflare,vector,supavisor
+        run: supabase start --workdir demo -x realtime,imgproxy,mailpit,studio,edge-runtime,logflare,vector,supavisor
       - name: Replay every migration and the seed again
         run: supabase db reset --workdir demo
       - name: Point the tests at the local stack
