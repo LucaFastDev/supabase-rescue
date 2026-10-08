@@ -1,6 +1,6 @@
 // Check a: a table without row level security. Every ordinary or partitioned table in an exposed
 // schema whose RLS is off is critical. Views, materialized views and foreign tables are not part of
-// this check. Without --db, checks a, b and c run no query, and this check alone reports that
+// this check. Without --db, checks a, b, c and k run no query, and this check alone reports that
 // they did not run, as one manual entry.
 
 import { catalogFor } from '../catalog.ts';
@@ -52,7 +52,7 @@ export const NO_DB: Finding = {
   kind: 'manual',
   title: 'The database checks did not run',
   location: { object: 'database (no --db given)' },
-  why: "Checks a, b and c look for tables without row level security, policies that let anyone in, and functions anyone can call. They read the live database's catalogs, and this audit ran without --db, so it cannot say whether any of those problems exist.",
+  why: "Checks a, b, c and k look for tables without row level security, policies that let anyone in, functions anyone can call, and public storage buckets whose files are meant to be private. They read the live database's catalogs and which storage buckets are public, and this audit ran without --db, so it cannot say whether any of those problems exist.",
   fix: {
     text: 'Create the audit role with the SQL that role-sql prints, set its password, and run the audit again with --db and a connection string for that role.',
     snippet: {
@@ -65,5 +65,5 @@ export const NO_DB: Finding = {
     },
   },
   checkBefore:
-    "That you use the role from role-sql rather than postgres. It is given no access to any table, view or sequence, so it cannot read or change a row directly. Read-only is only the default for its sessions, which a session can turn off; the tool itself always opens a read-only transaction and runs only catalog queries. Like every role, it can call any function that PUBLIC may execute, and a SECURITY DEFINER function runs with its owner's rights, so it can read or change data whoever calls it; check c reports these functions. So give the password only to the audit, and drop the role when the audit is done.",
+    "That you use the role from role-sql rather than postgres. It is given no access to any table, view or sequence of your app, so it cannot read or change a row of your data directly, and read access to the id, name and public columns of storage.buckets, so check k can see which buckets are public. Read-only is only the default for its sessions, which a session can turn off; the tool itself always opens a read-only transaction and runs only catalog queries and check k's read of storage.buckets. Like every role, it can call any function that PUBLIC may execute, and a SECURITY DEFINER function runs with its owner's rights, so it can read or change data whoever calls it; check c reports these functions. So give the password only to the audit, and drop the role when the audit is done.",
 };

@@ -9,6 +9,7 @@ import { paymentsCheck } from './payments.ts';
 import { policiesCheck } from './policies.ts';
 import { rlsCheck } from './rls.ts';
 import { secretsCheck } from './secrets.ts';
+import { storageCheck } from './storage.ts';
 
 export interface CheckContext {
   /** Absolute path of the audited repo checkout. */
@@ -24,11 +25,12 @@ export interface Check {
   run(context: CheckContext): Finding[] | Promise<Finding[]>;
 }
 
-/** Every check the audit runs, in order: the database checks a to c, then the repo checks d to j. */
+/** Every check the audit runs, in order: the database checks a to c and k, then the repo checks d to j. */
 export const checks: Check[] = [
   rlsCheck,
   policiesCheck,
   functionsCheck,
+  storageCheck,
   secretsCheck,
   authCheck,
   migrationsCheck,
