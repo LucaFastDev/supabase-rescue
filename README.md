@@ -1,6 +1,6 @@
 # supabase-rescue
 
-An audit tool for the security and production gaps typical of apps built with Lovable, Bolt or Cursor on Supabase, proven against a deliberately flawed sample booking app in `demo/`. The tool reads a client's repo (and, optionally, the live database's catalogs through a dedicated audit role), and writes a report of findings, each with a suggested fix and what to check before applying it. It never changes the audited repo or database. See [docs/PRD.md](docs/PRD.md) for the full plan.
+An audit tool for the security and production gaps typical of apps built with Lovable, Bolt or Cursor on Supabase, proven against a deliberately flawed sample booking app in `demo/`. The tool reads a client's repo (and, optionally, through a dedicated audit role, the live database's catalogs and which of its storage buckets are public), and writes a report of findings, each with a suggested fix and what to check before applying it. It never changes the audited repo or database. See [docs/PRD.md](docs/PRD.md) for the full plan.
 
 The case study for clients, the sample app before and after its fix, is in [case-study/README.md](case-study/README.md).
 
@@ -14,11 +14,12 @@ npm run audit -- <path> [--db <connection string>] [--out <dir>]
 
 It writes `report.md` (for the client) and `report.json` (the same findings, for scripts) to `--out`, or to the current directory. The exit code is 0 when nothing is critical or high, 1 when something is, and 2 when the audit could not run (for example, `<path>` is not a directory, or its `supabase/config.toml` is not valid TOML).
 
-The checks that read the live database's catalogs, with `--db` (never a row of an app table; without `--db` they run no query and the report says so as a manual action):
+The checks that read the live database's catalogs, and for check k the `id`, `name` and `public` columns of `storage.buckets`, with `--db` (never a row of an app table; without `--db` they run no query and the report says so as a manual action):
 
 - **a. Tables without RLS:** tables in an exposed schema (`public`, or one in `config.toml`'s `[api] schemas`) with row level security off.
 - **b. Permissive policies:** policies whose condition is just `true`, for anon or signed-in users, on tables in an exposed schema.
 - **c. Exposed functions:** SECURITY DEFINER functions anon or signed-in users can call, SECURITY DEFINER functions without a fixed `search_path`, and SECURITY INVOKER functions anon can call.
+- **k. Storage buckets:** a public storage bucket with a read policy on `storage.objects` that restricts who may read its files. A public bucket serves every file to anyone who has its URL, so the policy protects nothing.
 
 The checks that read only the repo:
 
@@ -38,8 +39,8 @@ npm run --silent role-sql
 
 prints the SQL that creates `supabase_rescue_audit`, a login role for `--db`. What it promises, and no more:
 
-- It is given no access to any table, view or sequence, so it cannot read or change a row directly.
-- Read-only is the default for its sessions, but a session can turn that off, so it is not a guarantee. The audit tool itself always opens a read-only transaction and runs only catalog queries.
+- It is given no access to any table, view or sequence of the app, so it cannot read or change a row of the app's data directly. It is given read access to the `id`, `name` and `public` columns of `storage.buckets`, so check k can see which buckets are public, and a policy on `storage.buckets` that lets it see every bucket.
+- Read-only is the default for its sessions, but a session can turn that off, so it is not a guarantee. The audit tool itself always opens a read-only transaction and runs only catalog queries and check k's read of `storage.buckets`.
 - Like every role, it can call any function that PUBLIC may execute (Postgres's default for new functions), and a SECURITY DEFINER function runs with its owner's rights, so such a function can read or change data whoever calls it. Check c reports these functions, and its fixes close this path.
 - So give the password only to the audit, and drop the role when the audit is done.
 

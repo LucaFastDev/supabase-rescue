@@ -13,7 +13,7 @@ import type { Finding } from '../src/findings.ts';
 import { main } from '../src/main.ts';
 import { AUDIT_ROLE, ROLE_SQL } from '../src/rolesql.ts';
 import type { Fixture } from './database.ts';
-import { inSchema, openFixture, randomName } from './database.ts';
+import { inSchema, openFixture, randomName, storageFixture } from './database.ts';
 import { tempDir, writeFiles } from './repo.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -30,6 +30,13 @@ const comments = ROLE_SQL.split('\n')
   .filter(Boolean)
   .join(' ');
 
+/** The statements the comment gives for removing the role, in order: the lines up to the next blank one. */
+const removal = (() => {
+  const lines = ROLE_SQL.split('\n');
+  const start = lines.findIndex((line) => line.startsWith('-- To remove the role')) + 1;
+  return lines.slice(start, lines.indexOf('', start)).map((line) => line.replace(/^--\s+/, ''));
+})();
+
 describe('role-sql', () => {
   it('prints the SQL, with no other output', async () => {
     let stdout = '';
@@ -43,8 +50,14 @@ describe('role-sql', () => {
     expect(statements).toContain('alter role supabase_rescue_audit set default_transaction_read_only = on;');
   });
 
-  it('grants nothing and sets no password; a closing comment says how to set one', () => {
-    expect(statements).not.toMatch(/\bgrant\b/i);
+  it("grants only check k's read of storage.buckets and sets no password; a closing comment says how to set one", () => {
+    expect(statements.match(/\bgrant\b.*/gi)).toEqual([
+      'grant usage on schema storage to supabase_rescue_audit;',
+      'grant select (id, name, public) on storage.buckets to supabase_rescue_audit;',
+    ]);
+    expect(statements.match(/\bcreate policy\b.*/gi)).toEqual([
+      'create policy supabase_rescue_audit_read_buckets on storage.buckets for select to supabase_rescue_audit using (true);',
+    ]);
     expect(statements).not.toMatch(/\bpassword\b/i);
     const tail = ROLE_SQL.trimEnd().split('\n').slice(-6).join('\n');
     expect(tail).toContain('\\password supabase_rescue_audit');
@@ -53,16 +66,29 @@ describe('role-sql', () => {
 
   it('says in its comments what the role is given, what it is not, and what Postgres does not guarantee', () => {
     expect(comments).toContain(
-      'What it is not given: any access to any table, view or sequence, so it cannot read or change a row of your data directly.',
+      'What it is not given: any access to any table, view or sequence of your app, so it cannot read or change a row of your data directly.',
     );
     expect(comments).toContain(
-      'Read-only is the default for its sessions, but a session can turn that off, so it is not a guarantee. The audit tool itself always opens a read-only transaction and runs only catalog queries.',
+      "Read-only is the default for its sessions, but a session can turn that off, so it is not a guarantee. The audit tool itself always opens a read-only transaction and runs only catalog queries and check k's read of storage.buckets.",
     );
     expect(comments).toContain('Like every role, it can call any function that PUBLIC may execute');
     expect(comments).toContain(
       "A SECURITY DEFINER function runs with its owner's rights, so it can read or change data whoever calls it. The audit's check c reports these functions, and its fixes close this path.",
     );
     expect(comments).toContain('So give the password only to the audit, and drop the role when the audit is done.');
+  });
+
+  it('says in its comments that check k reads three columns of storage.buckets, and how to remove the role now', () => {
+    expect(comments).toContain(
+      'It is also given read access to the id, name and public columns of storage.buckets, so check k can see which buckets are public.',
+    );
+    expect(comments).toContain('It cannot read your stored files or their names, nor any other column of storage.buckets.');
+    expect(removal).toEqual([
+      'drop policy supabase_rescue_audit_read_buckets on storage.buckets;',
+      'revoke all on storage.buckets from supabase_rescue_audit;',
+      'revoke usage on schema storage from supabase_rescue_audit;',
+      'drop role supabase_rescue_audit;',
+    ]);
   });
 
   it('claims neither "nothing else", read-only sessions nor a read-only catalog role, here or in the README, the PRD or the manual entry', async () => {
@@ -141,7 +167,14 @@ describe('the audit role, on the demo stack', () => {
     }
   });
 
-  it('has the attributes role-sql sets, and no grant on any table, view or sequence', async () => {
+  // After hooks run last-registered first, so this runs before the one above, whose drop role
+  // would fail while the role's storage grants and policy remain. It runs the removal the
+  // role-sql comment gives, which drops the role too.
+  afterAll(async () => {
+    for (const statement of removal) await fx?.sql(statement.replace(/^drop role /, 'drop role if exists '));
+  });
+
+  it('has the attributes role-sql sets, and no table-level grant on any table, view or sequence', async () => {
     const { rows } = await fx.sql(
       `select rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls, rolconfig from pg_roles where rolname = '${AUDIT_ROLE}'`,
     );
@@ -162,27 +195,81 @@ describe('the audit role, on the demo stack', () => {
     expect(grants.rows[0].n).toBe(0);
   });
 
-  it('gives the same a, b and c findings for the fixture schema as the superuser', async () => {
-    const repo = await tempDir();
-    await writeFiles(repo, { 'supabase/config.toml': `[api]\nschemas = ["${fx.schema}"]\n` });
-    const audit = async (db: string) => {
-      const out = await tempDir();
-      let stderr = '';
-      const code = await main(['audit', repo, '--db', db, '--out', out], { stderr: (t) => (stderr += t) });
-      expect(stderr).toBe('');
-      expect(code).toBe(1);
-      const findings: Finding[] = JSON.parse(await readFile(path.join(out, 'report.json'), 'utf8')).findings;
-      return inSchema(findings, fx.schema).filter((f) => ['a', 'b', 'c'].includes(f.check));
-    };
-    const asRole = await audit(roleUrl);
-    const asSuperuser = await audit(fx.url);
-    expect(asRole).toEqual(asSuperuser);
-    expect(asRole.map((f) => [f.check, f.severity, 'object' in f.location && f.location.object])).toEqual([
-      ['a', 'critical', `${fx.schema}.bookings`],
-      ['b', 'critical', `${fx.schema}.notes policy "anon insert"`],
-      ['c', 'critical', `${fx.schema}.open_definer()`],
-      ['c', 'low', `${fx.schema}.open_invoker()`],
-    ]);
+  it('gives the same a, b, c and k findings for the fixture schema and a fixture bucket as the superuser', async () => {
+    const store = storageFixture(fx);
+    const bucket = randomName('test');
+    try {
+      await store.add(bucket, true);
+      await store.policy(`${bucket}_owner`, `for select to authenticated using (bucket_id = '${bucket}' and owner_id = (select auth.uid())::text)`);
+      const repo = await tempDir();
+      await writeFiles(repo, { 'supabase/config.toml': `[api]\nschemas = ["${fx.schema}"]\n` });
+      const audit = async (db: string) => {
+        const out = await tempDir();
+        let stderr = '';
+        const code = await main(['audit', repo, '--db', db, '--out', out], { stderr: (t) => (stderr += t) });
+        expect(stderr).toBe('');
+        expect(code).toBe(1);
+        const findings: Finding[] = JSON.parse(await readFile(path.join(out, 'report.json'), 'utf8')).findings;
+        return [
+          ...inSchema(findings, fx.schema).filter((f) => ['a', 'b', 'c'].includes(f.check)),
+          ...findings.filter((f) => f.check === 'k' && 'object' in f.location && f.location.object === `storage.buckets/${bucket}`),
+        ];
+      };
+      const asRole = await audit(roleUrl);
+      const asSuperuser = await audit(fx.url);
+      expect(asRole).toEqual(asSuperuser);
+      expect(asRole.map((f) => [f.check, f.severity, 'object' in f.location && f.location.object])).toEqual([
+        ['a', 'critical', `${fx.schema}.bookings`],
+        ['b', 'critical', `${fx.schema}.notes policy "anon insert"`],
+        ['c', 'critical', `${fx.schema}.open_definer()`],
+        ['c', 'low', `${fx.schema}.open_invoker()`],
+        ['k', 'high', `storage.buckets/${bucket}`],
+      ]);
+    } finally {
+      await store.remove();
+    }
+  });
+
+  it('has exactly one column-level grant: select on the id, name and public of storage.buckets', async () => {
+    const { rows } = await fx.sql(
+      `select table_schema, table_name, column_name, privilege_type from information_schema.column_privileges where grantee = '${AUDIT_ROLE}' order by column_name`,
+    );
+    expect(rows).toEqual(
+      ['id', 'name', 'public'].map((column_name) => ({ table_schema: 'storage', table_name: 'buckets', column_name, privilege_type: 'SELECT' })),
+    );
+  });
+
+  it('sees the same buckets as the superuser, and cannot read any other column of storage.buckets or any column of storage.objects', async () => {
+    const store = storageFixture(fx);
+    const bucket = randomName('test');
+    try {
+      await store.add(bucket, false);
+      // Other test files add and remove their own test_<hex> buckets meanwhile, so only this
+      // file's bucket and the demo's are compared.
+      const buckets = `select id, name, public from storage.buckets where id = '${bucket}' or id !~ '^test_[0-9a-f]{12}' order by id`;
+      const asRole = (await role.query(buckets)).rows;
+      expect(asRole).toEqual((await fx.sql(buckets)).rows);
+      expect(asRole).toContainEqual({ id: bucket, name: bucket, public: false });
+      expect(asRole).toContainEqual({ id: 'customer-photos', name: 'customer-photos', public: true });
+
+      const columns = async (table: string) =>
+        (await fx.sql(`select column_name from information_schema.columns where table_schema = 'storage' and table_name = '${table}'`)).rows.map(
+          (r) => r.column_name as string,
+        );
+      const others = (await columns('buckets')).filter((c) => !['id', 'name', 'public'].includes(c));
+      expect(others.length).toBeGreaterThan(0);
+      for (const column of others) {
+        expect(await fails(`select "${column}" from storage.buckets limit 1`), column).toBe('permission denied for table buckets');
+      }
+      const objectColumns = await columns('objects');
+      expect(objectColumns).toContain('owner_id');
+      for (const column of objectColumns) {
+        expect(await fails(`select "${column}" from storage.objects limit 1`), column).toBe('permission denied for table objects');
+      }
+      expect(await fails('select count(*) from storage.objects')).toBe('permission denied for table objects');
+    } finally {
+      await store.remove();
+    }
   });
 
   const fails = async (sql: string) => {

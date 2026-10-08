@@ -1,9 +1,11 @@
-// What checks a, b and c read from the live database: its catalogs only, never a row of an app
-// table. The three queries run once per audit, in one read-only transaction (see db.ts), and the
-// checks share the result, so they all see the same moment of the database.
+// What checks a, b, c and k read from the live database: its catalogs, and for check k the id,
+// name and public setting of each storage bucket, never a row of an app table. The queries run
+// once per audit, in one read-only transaction (see db.ts), and the checks share the result, so
+// they all see the same moment of the database.
 
 import type { CheckContext } from './checks/index.ts';
 import { withReadOnlyDb } from './db.ts';
+import type { Query } from './db.ts';
 
 /**
  * Schemas that Supabase and Postgres manage. Checks a, b and c never report an object in one,
@@ -73,6 +75,19 @@ export interface FunctionRow {
   authenticated_can_execute: boolean;
 }
 
+export interface BucketRow {
+  id: string;
+  name: string;
+  public: boolean;
+}
+
+export interface StoragePolicyRow {
+  name: string;
+  permissive: 'PERMISSIVE' | 'RESTRICTIVE';
+  roles: string[];
+  qual: string | null;
+}
+
 export interface Catalog {
   /** Ordinary and partitioned tables in the exposed schemas. */
   tables: TableRow[];
@@ -80,6 +95,13 @@ export interface Catalog {
   policies: PolicyRow[];
   /** Every function (not procedure or aggregate) in every schema that is not skipped. */
   functions: FunctionRow[];
+  /**
+   * Every storage bucket, or 'no-privilege' when the role may not read storage.buckets, as an
+   * audit role made with an older role-sql may not.
+   */
+  buckets: BucketRow[] | 'no-privilege';
+  /** The policies that govern reading storage.objects (SELECT and ALL). */
+  storageReadPolicies: StoragePolicyRow[];
 }
 
 // $1: the exposed schemas. $2 and $3: the skipped schema names and prefixes.
@@ -98,7 +120,7 @@ where c.relkind in ('r', 'p')
 order by 1, 2`;
 
 // Joined by name rather than cast to regclass: a cast needs USAGE on the schema, which the audit
-// role from role-sql does not have.
+// role from role-sql has only on storage.
 const POLICIES_SQL = `
 select p.schemaname as schema, p.tablename as table, p.policyname as name, p.permissive,
        p.roles::text[] as roles, p.cmd, p.qual, p.with_check
@@ -128,14 +150,50 @@ where p.prokind = 'f'
   and ${NOT_EXTENSION_MEMBER('pg_catalog.pg_proc', 'p.oid')}
 order by 1, 2, 3`;
 
-/** Reads the catalogs through a read-only connection to `url`. */
+// Not a catalog: a table of the storage schema, of which role-sql grants the audit role these
+// three columns and a policy that lets it see every row.
+const BUCKETS_SQL = `select id, name, public from storage.buckets order by id`;
+
+const STORAGE_READ_POLICIES_SQL = `
+select policyname as name, permissive, roles::text[] as roles, qual
+from pg_catalog.pg_policies
+where schemaname = 'storage' and tablename = 'objects' and cmd in ('SELECT', 'ALL')
+order by policyname`;
+
+const INSUFFICIENT_PRIVILEGE = '42501';
+
+/**
+ * The storage buckets, or 'no-privilege' when the role may not read them. The query runs in a
+ * savepoint, so that a refusal leaves the transaction usable for the other queries.
+ */
+async function readBuckets(query: Query): Promise<BucketRow[] | 'no-privilege'> {
+  await query('savepoint storage_buckets');
+  try {
+    const buckets = await query<BucketRow>(BUCKETS_SQL);
+    await query('release savepoint storage_buckets');
+    return buckets;
+  } catch (error) {
+    if ((error as { code?: unknown }).code !== INSUFFICIENT_PRIVILEGE) throw error;
+    await query('rollback to savepoint storage_buckets');
+    return 'no-privilege';
+  }
+}
+
+/** Reads the catalogs and the storage buckets through a read-only connection to `url`. */
 export async function readCatalog(url: string, exposedSchemas: readonly string[]): Promise<Catalog> {
   const params = [exposedSchemas, SKIPPED_NAMES, SKIPPED_PREFIXES];
-  return withReadOnlyDb(url, async (query) => ({
-    tables: await query<TableRow>(TABLES_SQL, params),
-    policies: await query<PolicyRow>(POLICIES_SQL, params),
-    functions: await query<FunctionRow>(FUNCTIONS_SQL, params),
-  }));
+  return withReadOnlyDb(url, async (query) => {
+    const tables = await query<TableRow>(TABLES_SQL, params);
+    const policies = await query<PolicyRow>(POLICIES_SQL, params);
+    const functions = await query<FunctionRow>(FUNCTIONS_SQL, params);
+    // The policies before the buckets: pg_policies locks storage.objects to deparse them, and
+    // creating or dropping a policy on storage.objects locks it and then storage.buckets. Taking
+    // the two in the same order means the audit can wait for such a migration but never deadlock
+    // with it, which would make one of the two fail.
+    const storageReadPolicies = await query<StoragePolicyRow>(STORAGE_READ_POLICIES_SQL);
+    const buckets = await readBuckets(query);
+    return { tables, policies, functions, buckets, storageReadPolicies };
+  });
 }
 
 const snapshots = new WeakMap<CheckContext, Promise<Catalog>>();
