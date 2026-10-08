@@ -53,7 +53,7 @@ export const NO_DB: Finding = {
   kind: 'manual',
   title: 'The database checks did not run',
   location: { object: 'database (no --db given)' },
-  why: "Checks a, b, c and k look for tables without row level security, policies that let anyone in, functions anyone can call, and public storage buckets whose files are meant to be private. They read the live database's catalogs and which storage buckets are public, and this audit ran without --db, so it cannot say whether any of those problems exist.",
+  why: "Checks a, b, c and k look for tables without row level security, policies that let anyone in, functions anyone can call, and public storage buckets whose files are meant to be private. They read the live database's catalogs and which storage buckets are public, and this audit ran without --db, so it cannot say whether any of those problems exist. From the migrations alone, check c still flags SECURITY DEFINER functions the migrations leave executable by PUBLIC or anon; the rest of check c, and checks a, b and k, need --db.",
   fix: {
     text: 'Create the audit role with the SQL that role-sql prints, set its password, and run the audit again with --db and a connection string for that role.',
     snippet: {
