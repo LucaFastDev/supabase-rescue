@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { functionsCheck } from '../src/checks/functions.ts';
+import { NO_DB } from '../src/checks/rls.ts';
 import { splitSqlStatements } from '../src/checks/sql-statements.ts';
 import type { Finding } from '../src/findings.ts';
 import type { Fixture } from './database.ts';
@@ -70,8 +71,30 @@ describe('check c without --db: definer functions the migrations leave executabl
     expect(finding!.fix.text).toContain('--db');
   });
 
-  it('reports nothing when a later migration revokes it from public', async () => {
-    expect(await audit({ [FIRST]: REPORTS, [LATER]: 'revoke execute on function public.get_report(uuid) from public;\n' })).toEqual([]);
+  it('still reports it when a later migration revokes it from public only, as anon has its own grant on Supabase', async () => {
+    const findings = await audit({ [FIRST]: REPORTS, [LATER]: 'revoke execute on function public.get_report(uuid) from public;\n' });
+    expect(findings.map((f) => [f.severity, f.location])).toEqual([['high', { file: `supabase/migrations/${FIRST}`, line: lineOf(REPORTS, 'create function') }]]);
+    expect(findings[0]!.why).toContain('The migrations revoke EXECUTE on it from PUBLIC but not from anon.');
+  });
+
+  it('reports nothing when a later migration revokes it from public and anon', async () => {
+    expect(await audit({ [FIRST]: REPORTS, [LATER]: 'revoke execute on function public.get_report(uuid) from public, anon;\n' })).toEqual([]);
+  });
+
+  it('reports nothing when public and anon are revoked in separate statements in different migrations', async () => {
+    expect(
+      await audit({
+        [FIRST]: REPORTS,
+        [LATER]: 'revoke execute on function public.get_report(uuid) from public;\n',
+        '20260103000000_anon.sql': 'revoke execute on function public.get_report(uuid) from anon;\n',
+      }),
+    ).toEqual([]);
+  });
+
+  it('counts public and anon revoked by different forms', async () => {
+    const defaults = 'alter default privileges in schema public revoke execute on functions from public;\n';
+    expect(await audit({ [FIRST]: defaults + REPORTS, [LATER]: 'revoke execute on function public.get_report(uuid) from anon;\n' })).toEqual([]);
+    expect(await audit({ [FIRST]: REPORTS, [LATER]: 'revoke execute on function public.get_report from public;\nrevoke execute on all functions in schema public from anon;\n' })).toEqual([]);
   });
 
   it('still reports it when a later migration revokes it from anon only', async () => {
@@ -103,14 +126,16 @@ describe('check c without --db: definer functions the migrations leave executabl
     expect(await audit({ [FIRST]: REPORTS.replace('security definer\n', '') })).toEqual([]);
   });
 
-  it('counts alter default privileges revoking from public only when it comes before the create', async () => {
-    const defaults = 'alter default privileges in schema public revoke execute on functions from public;\n';
+  it('counts alter default privileges revoking from public and anon only when it comes before the create', async () => {
+    const defaults = 'alter default privileges in schema public revoke execute on functions from public, anon;\n';
     expect(await audit({ [FIRST]: defaults + REPORTS })).toEqual([]);
     expect(await audit({ [FIRST]: REPORTS, [LATER]: defaults })).toHaveLength(1);
+    // From public alone, anon keeps its own grant.
+    expect(await audit({ [FIRST]: `alter default privileges in schema public revoke execute on functions from public;\n${REPORTS}` })).toHaveLength(1);
     // With no `in schema`, for every schema.
-    expect(await audit({ [FIRST]: `alter default privileges for role postgres revoke execute on functions from public;\n${REPORTS}` })).toEqual([]);
+    expect(await audit({ [FIRST]: `alter default privileges for role postgres revoke execute on functions from public, anon;\n${REPORTS}` })).toEqual([]);
     // In another schema only, it does not cover public.
-    expect(await audit({ [FIRST]: `alter default privileges in schema private revoke execute on functions from public;\n${REPORTS}` })).toHaveLength(1);
+    expect(await audit({ [FIRST]: `alter default privileges in schema private revoke execute on functions from public, anon;\n${REPORTS}` })).toHaveLength(1);
   });
 
   it('counts a revoke on all functions in the schema only when it comes after the create', async () => {
@@ -156,7 +181,7 @@ do $body$ begin execute 'create function public.other() returns int security def
 
   it('treats unqualified names as public, and compares names case-insensitively without their quotes', async () => {
     const create = 'CREATE FUNCTION "Public"."Get_Report"(p_id uuid) RETURNS int SECURITY DEFINER LANGUAGE sql AS $fn$ select 1; $fn$;\n';
-    expect(await audit({ [FIRST]: create, [LATER]: 'revoke execute on function get_report(uuid) from public;\n' })).toEqual([]);
+    expect(await audit({ [FIRST]: create, [LATER]: 'revoke execute on function get_report(uuid) from public, anon;\n' })).toEqual([]);
     expect((await audit({ [FIRST]: 'create function get_report() returns int security definer language sql as $$ select 1 $$;\n' })).map((f) => f.title)).toEqual([
       "Function public.get_report runs with its owner's rights and the migrations let anyone call it",
     ]);
@@ -167,11 +192,17 @@ do $body$ begin execute 'create function public.other() returns int security def
     const findings = await audit({ [FIRST]: overloads });
     expect(findings).toHaveLength(1);
     expect(findings[0]!.fix.snippet!.code).toContain('public.get_report(p_id uuid, p_limit int) from public, anon;');
-    expect(await audit({ [FIRST]: overloads, [LATER]: 'revoke execute on function public.get_report(uuid) from public;\n' })).toEqual([]);
+    expect(await audit({ [FIRST]: overloads, [LATER]: 'revoke execute on function public.get_report(uuid) from public, anon;\n' })).toEqual([]);
   });
 
   it('reports nothing when the repo has no migrations folder', async () => {
     expect(await functionsCheck.run({ repoPath: await tempDir(), exposedSchemas: ['public'] })).toEqual([]);
+  });
+
+  it("is named in check a's entry for an audit without --db, which says the rest of check c needs --db", () => {
+    expect(NO_DB.why).toContain(
+      'From the migrations alone, check c still flags SECURITY DEFINER functions the migrations leave executable by PUBLIC or anon; the rest of check c, and checks a, b and k, need --db.',
+    );
   });
 });
 

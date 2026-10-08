@@ -18,7 +18,7 @@ The checks that read the live database's catalogs, and for check k the `id`, `na
 
 - **a. Tables without RLS:** tables in an exposed schema (`public`, or one in `config.toml`'s `[api] schemas`) with row level security off.
 - **b. Permissive policies:** policies whose condition is just `true`, for anon or signed-in users, on tables in an exposed schema.
-- **c. Exposed functions:** SECURITY DEFINER functions anon or signed-in users can call, SECURITY DEFINER functions without a fixed `search_path`, and SECURITY INVOKER functions anon can call. Without `--db` it reads `supabase/migrations/*.sql` instead and flags only SECURITY DEFINER functions in an exposed schema that no migration revokes from PUBLIC, or that a migration grants to anon; `--db` confirms what the live database allows.
+- **c. Exposed functions:** SECURITY DEFINER functions anon or signed-in users can call, SECURITY DEFINER functions without a fixed `search_path`, and SECURITY INVOKER functions anon can call. Without `--db` it reads `supabase/migrations/*.sql` instead and flags only SECURITY DEFINER functions in an exposed schema that the migrations leave executable by PUBLIC or anon: not revoked from both (on Supabase, anon gets its own grant on new functions, so a revoke from PUBLIC alone is not enough), or granted to anon; the rest of check c needs `--db`, which also confirms what the live database allows.
 - **k. Storage buckets:** a public storage bucket with a read policy on `storage.objects` that restricts who may read its files. A public bucket serves every file to anyone who has its URL, so the policy protects nothing.
 
 The checks that read only the repo:

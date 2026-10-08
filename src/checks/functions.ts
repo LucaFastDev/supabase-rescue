@@ -5,9 +5,9 @@
 // finding per function, at its highest severity, naming every problem it has.
 //
 // Without --db it reads supabase/migrations/*.sql instead, and finds one problem only: a SECURITY
-// DEFINER function in an exposed schema that no migration revokes from PUBLIC, or that a migration
-// grants to anon and no later one revokes from anon, is high. With --db the catalog is authoritative and the migrations are
-// not read.
+// DEFINER function in an exposed schema that the migrations do not revoke from both PUBLIC and
+// anon, or that a migration grants to anon and no later one revokes from anon, is high. With --db
+// the catalog is authoritative and the migrations are not read.
 
 import { catalogFor } from '../catalog.ts';
 import type { FunctionRow } from '../catalog.ts';
@@ -276,23 +276,35 @@ async function repoOnlyFindings(context: CheckContext): Promise<Finding[]> {
     // A revoke that removes `role`'s execute on this function, placed after `after`.
     const revokedFrom = (role: string, after: number) =>
       revokes.some((p) => p.at > after && p.roles.includes(role) && (p.functions.includes(key) || p.schemas.includes(fn.schema)));
-    const covered =
-      revokes.some((p) => p.roles.includes('public') && (p.functions.includes(key) || (p.at > fn.at && p.schemas.includes(fn.schema)))) ||
-      defaultRevokes.some((d) => d.at < fn.at && d.roles.includes('public') && (d.schemas === null || d.schemas.includes(fn.schema)));
+    // Whether the migrations revoke `role`'s execute on this function, in any of the three forms.
+    const revoked = (role: string) =>
+      revokes.some((p) => p.roles.includes(role) && (p.functions.includes(key) || (p.at > fn.at && p.schemas.includes(fn.schema)))) ||
+      defaultRevokes.some((d) => d.at < fn.at && d.roles.includes(role) && (d.schemas === null || d.schemas.includes(fn.schema)));
+    // On Supabase, default privileges in public grant anon its own EXECUTE on each new function, so
+    // a revoke from PUBLIC alone still leaves anon able to call it.
+    const covered = revoked('public') && revoked('anon');
     const grantedToAnon = privileges.some(
       (p) => p.grant && p.functions.includes(key) && p.roles.includes('anon') && !revokedFrom('anon', p.at),
     );
     if (covered && !grantedToAnon) continue;
-    findings.push(repoOnlyFinding(fn, grantedToAnon));
+    findings.push(repoOnlyFinding(fn, grantedToAnon ? 'granted-to-anon' : revoked('public') ? 'anon-not-revoked' : 'public-not-revoked'));
   }
   return findings;
 }
 
-function repoOnlyFinding(fn: Created, grantedToAnon: boolean): Finding {
+type RepoOnlyReason = 'granted-to-anon' | 'public-not-revoked' | 'anon-not-revoked';
+
+const ANON_ROLE = 'anon, the role of anyone who has your anon key, which ships inside your app to every visitor,';
+
+const REPO_ONLY_REASON: Record<RepoOnlyReason, string> = {
+  'granted-to-anon': `A migration grants EXECUTE on it to ${ANON_ROLE} and no later migration revokes it.`,
+  'public-not-revoked': `Postgres lets PUBLIC execute every new function, and no migration revokes that, so ${ANON_ROLE} can execute it through PUBLIC, since anon is a member of PUBLIC. A grant to authenticated does not take it away.`,
+  'anon-not-revoked': `The migrations revoke EXECUTE on it from PUBLIC but not from anon. On Supabase, default privileges give ${ANON_ROLE} its own EXECUTE on a new function, as they do in public, so a revoke from PUBLIC alone does not stop anon executing it.`,
+};
+
+function repoOnlyFinding(fn: Created, why: RepoOnlyReason): Finding {
   const signature = `${qualified(fn.schema, fn.name)}(${fn.args})`;
-  const reason = grantedToAnon
-    ? 'A migration grants EXECUTE on it to anon, the role of anyone who has your anon key, which ships inside your app to every visitor, and no later migration revokes it.'
-    : 'Postgres lets PUBLIC execute every new function, and no migration revokes that, so anon, the role of anyone who has your anon key, which ships inside your app to every visitor, can execute it through PUBLIC, since anon is a member of PUBLIC. A grant to authenticated does not take it away.';
+  const reason = REPO_ONLY_REASON[why];
   return {
     check: 'c',
     severity: 'high',
