@@ -2,7 +2,7 @@
 
 Lovable, Bolt and Cursor build an app that works. Whether a stranger can read its database is a different question, and the app working tells you nothing about it.
 
-In 2025 a security researcher reported Lovable-built apps whose databases anyone on the internet could read and change ([CVE-2025-48757](https://nvd.nist.gov/vuln/detail/CVE-2025-48757)). Lovable disputed the report: in its view, protecting each app's data is the app owner's responsibility. So it is yours. Built-in security scans help, but Lovable's own [security documentation](https://docs.lovable.dev/features/security) says they cannot guarantee an app is secure.
+In 2025 a security researcher reported Lovable-built apps whose databases anyone on the internet could read and change ([CVE-2025-48757](https://www.cve.org/CVERecord?id=CVE-2025-48757)). Lovable disputed the report: in its view, protecting each app's data is the app owner's responsibility. So it is yours. Built-in security scans help, but Lovable's own [security documentation](https://docs.lovable.dev/features/security) says they cannot guarantee an app is secure.
 
 I check apps like these and fix what I find. Here is a sample.
 
