@@ -5,6 +5,9 @@ const STAFF_EMAIL = 'mia@example.com';
 const STAFF_PASSWORD = 'salon-demo-password';
 const SEEDED_CUSTOMER = 'Aisha Rahman';
 
+/** A 1x1 PNG, the photo staff add on a customer's page. */
+const PHOTO_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
 /** Records every console error, uncaught exception, failed request and HTTP error on the page. */
 function watchForProblems(page: Page): string[] {
   const problems: string[] = [];
@@ -48,6 +51,31 @@ test('staff sign in and see the seeded appointments', async ({ page }) => {
   await expect(page).toHaveURL(/\/appointments$/);
   await expect(page.getByRole('heading', { name: 'Appointments' })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: SEEDED_CUSTOMER }).first()).toBeVisible();
+  await page.waitForLoadState('networkidle');
+
+  expect(problems).toEqual([]);
+});
+
+test("staff add a photo on the first seeded customer's page and see it there", async ({ page }) => {
+  const problems = watchForProblems(page);
+  await page.goto('/login');
+
+  await page.getByLabel('Email').fill(STAFF_EMAIL);
+  await page.getByLabel('Password').fill(STAFF_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/appointments$/);
+
+  await page.goto('/customers');
+  await page.getByRole('link', { name: SEEDED_CUSTOMER }).click();
+  await expect(page.getByRole('heading', { name: 'Photos' })).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  const photos = page.getByRole('img', { name: 'Customer photo' });
+  const before = await photos.count();
+
+  await page.getByLabel('Add photo').setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from(PHOTO_PNG, 'base64') });
+  await expect(photos).toHaveCount(before + 1);
+  await expect(photos.last()).toHaveJSProperty('complete', true);
+  await expect(page.getByText('The photo could not be added.')).toHaveCount(0);
   await page.waitForLoadState('networkidle');
 
   expect(problems).toEqual([]);

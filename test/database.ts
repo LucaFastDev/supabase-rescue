@@ -46,11 +46,12 @@ export function randomName(prefix: string): string {
 
 /**
  * True when a finding's database object is one a test file made with randomName: anything in a
- * fixture schema (test_<hex>), or a table in public named test_…_<hex>, as the audit role test
- * creates. Test files run in parallel, so an audit of public can see another file's fixtures.
+ * fixture schema (test_<hex>), a table in public named test_…_<hex>, as the audit role test
+ * creates, or a storage bucket named test_<hex>. Test files run in parallel, so an audit of public
+ * can see another file's fixtures, and buckets are global, so an audit sees every file's buckets.
  */
 export function isTestFixtureObject(object: string): boolean {
-  return /^(?:test_[0-9a-f]{12}\.|public\.test_[a-z_]+_[0-9a-f]{12}(?:$|[ (]))/.test(object);
+  return /^(?:test_[0-9a-f]{12}\.|public\.test_[a-z_]+_[0-9a-f]{12}(?:$|[ (])|storage\.buckets\/test_[0-9a-f]{12}$)/.test(object);
 }
 
 export interface Fixture {
@@ -91,6 +92,50 @@ export async function openFixture(): Promise<Fixture> {
         for (const name of schemas) await client.query(`drop schema if exists ${name} cascade`);
       } finally {
         await client.end();
+      }
+    },
+  };
+}
+
+/**
+ * Storage buckets and policies on storage.objects for one test. Buckets are global, not per
+ * schema, so each test removes its own with remove() in a finally. Bucket ids are test_<hex>, and
+ * every policy names its own bucket, so that no fixture changes what another test file sees.
+ */
+export interface StorageFixture {
+  add(id: string, isPublic: boolean): Promise<void>;
+  /** Creates a policy on storage.objects; `body` is everything after the policy's name and table. */
+  policy(name: string, body: string): Promise<void>;
+  remove(): Promise<void>;
+}
+
+export function storageFixture(fx: Fixture): StorageFixture {
+  const buckets: string[] = [];
+  const policies: string[] = [];
+  return {
+    async add(id, isPublic) {
+      await fx.client.query('insert into storage.buckets (id, name, public) values ($1, $1, $2)', [id, isPublic]);
+      buckets.push(id);
+    },
+    async policy(name, body) {
+      await fx.sql(`create policy "${name}" on storage.objects ${body}`);
+      policies.push(name);
+    },
+    async remove() {
+      for (const name of policies) await fx.sql(`drop policy if exists "${name}" on storage.objects`);
+      // Storage refuses a direct delete from its tables unless this is set, here only for this
+      // transaction. The delete's foreign key check locks storage.objects after storage.buckets,
+      // the opposite of a policy change on storage.objects in another test file, so
+      // storage.objects is locked first.
+      await fx.sql('begin');
+      try {
+        await fx.sql("set local storage.allow_delete_query = 'true'");
+        await fx.sql('lock table storage.objects in row share mode');
+        await fx.client.query('delete from storage.buckets where id = any($1::text[])', [buckets]);
+        await fx.sql('commit');
+      } catch (error) {
+        await fx.sql('rollback');
+        throw error;
       }
     },
   };

@@ -1,17 +1,51 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
+import { safeFileName } from "@/lib/safe-file-name";
 import { formatDateTime, type Appointment, type Customer } from "@/lib/types";
+
+const PHOTOS = "customer-photos";
 
 const CustomerDetail = () => {
   const { id } = useParams<{ id: string }>();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const loadPhotos = async (customerId: string) => {
+    const { data, error } = await supabase.storage.from(PHOTOS).list(customerId);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    // Folders come back with no id; only files are photos.
+    const files = (data ?? []).filter((item) => item.id !== null);
+    setPhotos(files.map((file) => supabase.storage.from(PHOTOS).getPublicUrl(`${customerId}/${file.name}`).data.publicUrl));
+  };
+
+  const addPhoto = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.target;
+    const file = input.files?.[0];
+    if (!id || !file) return;
+    setPhotoError(null);
+    const { error } = await supabase.storage
+      .from(PHOTOS)
+      .upload(`${id}/${crypto.randomUUID()}-${safeFileName(file.name)}`, file);
+    input.value = "";
+    if (error) {
+      setPhotoError("The photo could not be added.");
+      return;
+    }
+    loadPhotos(id);
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -33,6 +67,7 @@ const CustomerDetail = () => {
         if (error) setError(error.message);
         else setAppointments((data ?? []) as Appointment[]);
       });
+    loadPhotos(id);
   }, [id]);
 
   if (error) return <p className="text-sm text-destructive">{error}</p>;
@@ -80,6 +115,23 @@ const CustomerDetail = () => {
             ))}
           </TableBody>
         </Table>
+      </div>
+      <div className="grid gap-2">
+        <h2 className="text-lg font-semibold">Photos</h2>
+        <div className="grid gap-1 justify-self-start">
+          <Label htmlFor="add-photo">Add photo</Label>
+          <Input id="add-photo" type="file" accept="image/*" onChange={addPhoto} />
+        </div>
+        {photoError && <p className="text-sm text-destructive">{photoError}</p>}
+        {photos.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No photos yet.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {photos.map((url) => (
+              <img key={url} src={url} alt="Customer photo" className="h-32 w-32 rounded-md object-cover" />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

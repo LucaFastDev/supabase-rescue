@@ -1,12 +1,12 @@
-// Pins the fixed sample app, which on main also carries check g's, check h's and check i's seeded
-// flaws until the launch fixes land: the audit of demo/ with --db on the demo stack finds four
-// findings with a severity, the critical for g, the highs for h and i and the low for the column
-// check f's migration dropped (an applied migration cannot be undone), no review entry, and as
-// manual entries the dashboard auth checks, check i's two auth email checks, check j's backups and
-// plan check and one rotation of the service-role key the git history keeps. It also checks what
-// the fixed policies let each role do, and the booking page's reference. It leaves nothing
-// behind: the report goes to a temporary directory, and every statement run as a role is rolled
-// back.
+// Pins the fixed sample app, which on main also carries check g's, check h's, check i's and check
+// k's seeded flaws until the launch fixes land: the audit of demo/ with --db on the demo stack
+// finds five findings with a severity, the critical for g, the highs for h, i and k and the low for
+// the column check f's migration dropped (an applied migration cannot be undone), no review
+// entry, and as manual entries the dashboard auth checks, check i's two auth email checks, check
+// j's backups and plan check and one rotation of the service-role key the git history keeps. It
+// also checks what the fixed policies let each role do, and the booking page's reference. It
+// leaves nothing behind: the report goes to a temporary directory, and every statement run as a
+// role is rolled back.
 
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -44,27 +44,31 @@ describe('the audit of demo/, on the demo stack', () => {
 
   const isFixture = (f: Finding) => 'object' in f.location && isTestFixtureObject(f.location.object);
 
-  it("runs, and exits 1 because of checks g, h and i's seeded flaws alone", () => {
+  it("runs, and exits 1 because of checks g, h, i and k's seeded flaws alone", () => {
     expect(stderr).toBe('');
     // Other test files, running at the same time, can have a fixture table without RLS in public,
-    // which the audit sees as critical. Those, and check g's, check h's and check i's seeded flaws,
-    // are the only findings allowed to raise the exit code.
+    // which the audit sees as critical, or a fixture bucket check k reports. Those, and check g's,
+    // check h's, check i's and check k's seeded flaws, are the only findings allowed to raise the
+    // exit code.
     const raising = all.filter((f) => f.severity === 'critical' || f.severity === 'high');
     expect(raising.filter((f) => !isFixture(f)).map(summary)).toEqual([
       ['g', 'critical', 'supabase/functions/create-checkout/index.ts'],
       ['h', 'high', 'supabase/functions/summarise-weeks/index.ts'],
       ['i', 'high', 'src/pages/Login.tsx'],
+      ['k', 'high', 'storage.buckets/customer-photos'],
     ]);
     expect(code).toBe(raising.length === 0 ? 0 : 1);
   });
 
-  it("finds the critical for check g's seeded flaw, the highs for checks h's and i's and the low for the applied migration that dropped a column", () => {
+  it("finds the critical for check g's seeded flaw, the highs for checks h's, i's and k's and the low for the applied migration that dropped a column", () => {
     expect(findings.filter((f) => f.severity !== undefined).map(summary)).toEqual([
       ['g', 'critical', 'supabase/functions/create-checkout/index.ts'],
       ['h', 'high', 'supabase/functions/summarise-weeks/index.ts'],
       ['i', 'high', 'src/pages/Login.tsx'],
+      ['k', 'high', 'storage.buckets/customer-photos'],
       ['f', 'low', 'supabase/migrations/20260915110000_staff_notes.sql'],
     ]);
+    expect(findings.find((f) => f.check === 'k')!.title).toBe('Public storage bucket with a read policy that does not protect its files');
     expect(findings.find((f) => f.check === 'f')!.title).toBe('Migration drops a column');
     expect(findings.find((f) => f.check === 'g')!.title).toBe('Stripe charges an amount the browser sent');
     expect(findings.find((f) => f.check === 'h')!.title).toBe('Anyone can run up your OpenAI bill through the summarise-weeks edge function');
@@ -160,6 +164,32 @@ describe('the fixed access rules, as each role sees them', () => {
     expect((await as('authenticated', STAFF_ID, 'select id, full_name, phone, email, created_at from public.customers')).rowCount).toBeGreaterThan(0);
   });
 
+  it('lets staff add customer photos, and no one else; staff read back only the photos they added', async () => {
+    const photo = (owner: string) =>
+      `insert into storage.objects (bucket_id, name, owner_id) values ('customer-photos', 'test/${owner}.png', '${owner}')`;
+    expect((await as('authenticated', STAFF_ID, photo(STAFF_ID))).rowCount).toBe(1);
+    await expect(as('authenticated', NOT_STAFF_ID, photo(NOT_STAFF_ID))).rejects.toThrow(/row-level security/);
+    await expect(as('anon', null, photo(STAFF_ID))).rejects.toThrow(/row-level security/);
+
+    // Two photos, one added by this staff member and one by someone else, read as each role.
+    const visible = async (role: 'anon' | 'authenticated', sub: string | null) => {
+      await client.query('begin');
+      try {
+        await client.query(photo(STAFF_ID));
+        await client.query(photo(NOT_STAFF_ID));
+        await client.query(`set local role ${role}`);
+        await client.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role, ...(sub && { sub }) })]);
+        const { rows } = await client.query("select name from storage.objects where bucket_id = 'customer-photos' and name like 'test/%'");
+        return rows.map((r) => r.name);
+      } finally {
+        await client.query('rollback');
+      }
+    };
+    expect(await visible('authenticated', STAFF_ID)).toEqual([`test/${STAFF_ID}.png`]);
+    expect(await visible('authenticated', NOT_STAFF_ID)).toEqual([]);
+    expect(await visible('anon', null)).toEqual([]);
+  });
+
   it('has no appointments_for_phone function any more', async () => {
     const { rows } = await client.query("select to_regprocedure('public.appointments_for_phone(text)') as fn");
     expect(rows[0].fn).toBeNull();
@@ -208,10 +238,10 @@ describe('the fixed booking page and staff app', () => {
 
 describe('isTestFixtureObject', () => {
   it('matches only the names test files make with randomName', () => {
-    for (const object of ['test_0a1b2c3d4e5f.notes', 'test_0a1b2c3d4e5f.f(integer)', 'public.test_public_0a1b2c3d4e5f']) {
+    for (const object of ['test_0a1b2c3d4e5f.notes', 'test_0a1b2c3d4e5f.f(integer)', 'public.test_public_0a1b2c3d4e5f', 'storage.buckets/test_0a1b2c3d4e5f']) {
       expect(isTestFixtureObject(object), object).toBe(true);
     }
-    for (const object of ['public.staff_notes', 'public.test_notes', 'public.test_public_0a1b2c3d4e5fx', 'test_schema.notes', 'api.test_0a1b2c3d4e5f']) {
+    for (const object of ['public.staff_notes', 'public.test_notes', 'public.test_public_0a1b2c3d4e5fx', 'test_schema.notes', 'api.test_0a1b2c3d4e5f', 'storage.buckets/customer-photos', 'storage.buckets/test_0a1b2c3d4e5fx']) {
       expect(isTestFixtureObject(object), object).toBe(false);
     }
   });
