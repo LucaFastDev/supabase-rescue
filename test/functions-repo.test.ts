@@ -4,7 +4,7 @@ import { NO_DB } from '../src/checks/rls.ts';
 import { splitSqlStatements } from '../src/checks/sql-statements.ts';
 import type { Finding } from '../src/findings.ts';
 import type { Fixture } from './database.ts';
-import { inSchema, openFixture } from './database.ts';
+import { inSchema, openFixture, randomName } from './database.ts';
 import { tempDir, writeFiles } from './repo.ts';
 
 /** Runs check c without --db on a repo holding these migrations, by file name. */
@@ -92,7 +92,7 @@ describe('check c without --db: definer functions the migrations leave executabl
   });
 
   it('counts public and anon revoked by different forms', async () => {
-    const defaults = 'alter default privileges in schema public revoke execute on functions from public;\n';
+    const defaults = 'alter default privileges revoke execute on functions from public;\n';
     expect(await audit({ [FIRST]: defaults + REPORTS, [LATER]: 'revoke execute on function public.get_report(uuid) from anon;\n' })).toEqual([]);
     expect(await audit({ [FIRST]: REPORTS, [LATER]: 'revoke execute on function public.get_report from public;\nrevoke execute on all functions in schema public from anon;\n' })).toEqual([]);
   });
@@ -127,13 +127,17 @@ describe('check c without --db: definer functions the migrations leave executabl
   });
 
   it('counts alter default privileges revoking from public and anon only when it comes before the create', async () => {
-    const defaults = 'alter default privileges in schema public revoke execute on functions from public, anon;\n';
+    // PUBLIC's default is global and anon's is Supabase's in public, so each needs its own form.
+    const defaults =
+      'alter default privileges revoke execute on functions from public;\nalter default privileges in schema public revoke execute on functions from anon;\n';
     expect(await audit({ [FIRST]: defaults + REPORTS })).toEqual([]);
     expect(await audit({ [FIRST]: REPORTS, [LATER]: defaults })).toHaveLength(1);
+    // In public only, it leaves PUBLIC's global default in place.
+    expect(await audit({ [FIRST]: `alter default privileges in schema public revoke execute on functions from public, anon;\n${REPORTS}` })).toHaveLength(1);
     // From public alone, anon keeps its own grant.
     expect(await audit({ [FIRST]: `alter default privileges in schema public revoke execute on functions from public;\n${REPORTS}` })).toHaveLength(1);
-    // With no `in schema`, for every schema.
-    expect(await audit({ [FIRST]: `alter default privileges for role postgres revoke execute on functions from public, anon;\n${REPORTS}` })).toEqual([]);
+    // With no `in schema`, it leaves anon's grant in public in place.
+    expect(await audit({ [FIRST]: `alter default privileges for role postgres revoke execute on functions from public, anon;\n${REPORTS}` })).toHaveLength(1);
     // In another schema only, it does not cover public.
     expect(await audit({ [FIRST]: `alter default privileges in schema private revoke execute on functions from public, anon;\n${REPORTS}` })).toHaveLength(1);
   });
@@ -187,12 +191,35 @@ do $body$ begin execute 'create function public.other() returns int security def
     ]);
   });
 
-  it('treats overloads of one name as one function', async () => {
+  it('judges each overload of one name on its own, naming its own signature in the fix', async () => {
     const overloads = `${REPORTS}create function public.get_report(p_id uuid, p_limit int default 10) returns int security definer language sql as $$ select 1 $$;\n`;
     const findings = await audit({ [FIRST]: overloads });
-    expect(findings).toHaveLength(1);
-    expect(findings[0]!.fix.snippet!.code).toContain('public.get_report(p_id uuid, p_limit int) from public, anon;');
-    expect(await audit({ [FIRST]: overloads, [LATER]: 'revoke execute on function public.get_report(uuid) from public, anon;\n' })).toEqual([]);
+    expect(findings.map((f) => f.fix.snippet!.code.split('\n')[0])).toEqual([
+      'revoke execute on function public.get_report(p_id uuid) from public, anon;',
+      'revoke execute on function public.get_report(p_id uuid, p_limit int) from public, anon;',
+    ]);
+    const rest = await audit({ [FIRST]: overloads, [LATER]: 'revoke execute on function public.get_report(uuid) from public, anon;\n' });
+    expect(rest).toHaveLength(1);
+    expect(rest[0]!.fix.snippet!.code).toContain('public.get_report(p_id uuid, p_limit int) from public, anon;');
+  });
+
+  it('applies a revoke or drop with no argument list to the one overload of that name, and to none when there are several', async () => {
+    const overloads = `${REPORTS}create function public.get_report(p_id uuid, p_limit int default 10) returns int security definer language sql as $$ select 1 $$;\n`;
+    expect(await audit({ [FIRST]: overloads, [LATER]: 'revoke execute on function public.get_report from public, anon;\n' })).toHaveLength(2);
+    expect(await audit({ [FIRST]: overloads, [LATER]: 'drop function public.get_report;\n' })).toHaveLength(2);
+    // Once one is dropped, the name resolves to the other.
+    expect(
+      await audit({ [FIRST]: overloads, [LATER]: 'drop function public.get_report(uuid);\nrevoke execute on function public.get_report from public, anon;\n' }),
+    ).toEqual([]);
+  });
+
+  it('matches a signature by its argument types, whatever names, modes and aliases it is written with', async () => {
+    const create =
+      'create function public.f(in p_id integer, p_at timestamptz, out total bigint, p_tags varchar(20)[]) security definer language sql as $$ select 1::bigint $$;\n';
+    expect(
+      await audit({ [FIRST]: create, [LATER]: 'revoke execute on function public.f(int4, timestamp with time zone, character varying[]) from public, anon;\n' }),
+    ).toEqual([]);
+    expect(await audit({ [FIRST]: create, [LATER]: 'revoke execute on function public.f(int, timestamp, text[]) from public, anon;\n' })).toHaveLength(1);
   });
 
   it('reports nothing when the repo has no migrations folder', async () => {
@@ -268,5 +295,118 @@ describe('check c with --db, on the demo stack', () => {
     expect(repoAlone.map((f) => f.location)).toEqual([{ file: `supabase/migrations/${FIRST}`, line: 1 }]);
     expect(withRepo.filter((f) => 'file' in f.location)).toEqual([]);
     expect(inSchema(withRepo, fx.schema)).toEqual(inSchema(findings, fx.schema));
+  });
+});
+
+// Migrations on which check c without --db must reach the verdict the database reaches: in the
+// repo they are written for public, and on the demo stack each runs in a schema of its own, as a
+// role of its own, so that its default privileges change nothing another test sees.
+const definer = (s: string, args: string) =>
+  `create function ${s}.f(${args}) returns int language sql security definer set search_path = '' as $$ select 1 $$;\n`;
+
+const VERDICTS: { name: string; migrations: (s: string) => string; reported: string[] }[] = [
+  {
+    name: 'per-schema default revokes from public and anon leave PUBLIC its global default',
+    migrations: (s) =>
+      `alter default privileges in schema ${s} revoke execute on functions from public;\nalter default privileges in schema ${s} revoke execute on functions from anon;\n${definer(s, '')}`,
+    reported: ['f()'],
+  },
+  {
+    name: "global default revokes from public and anon leave anon Supabase's per-schema grant",
+    migrations: (s) =>
+      `alter default privileges revoke execute on functions from public;\nalter default privileges revoke execute on functions from anon;\n${definer(s, '')}`,
+    reported: ['f()'],
+  },
+  {
+    name: 'a global default revoke from public and a per-schema one from anon cover both',
+    migrations: (s) =>
+      `alter default privileges revoke execute on functions from public;\nalter default privileges in schema ${s} revoke execute on functions from anon;\n${definer(s, '')}`,
+    reported: [],
+  },
+  {
+    name: 'a revoke on one overload leaves the other open',
+    migrations: (s) => `${definer(s, 'integer')}${definer(s, 'text')}revoke execute on function ${s}.f(int) from public, anon;\n`,
+    reported: ['f(text)'],
+  },
+  {
+    name: 'an invoker overload created later does not hide a definer one',
+    migrations: (s) => `${definer(s, 'integer')}${definer(s, 'text').replace('security definer', 'security invoker')}`,
+    reported: ['f(integer)'],
+  },
+  {
+    name: 'dropping one overload leaves the other',
+    migrations: (s) => `${definer(s, 'integer')}${definer(s, 'text')}drop function ${s}.f(int);\n`,
+    reported: ['f(text)'],
+  },
+  {
+    name: 'a revoke before a drop and a new create does not cover the new function',
+    migrations: (s) =>
+      `${definer(s, 'integer')}revoke execute on function ${s}.f(int) from public, anon;\ndrop function ${s}.f(int);\n${definer(s, 'integer')}`,
+    reported: ['f(integer)'],
+  },
+  {
+    name: 'a revoke before create or replace still covers the function',
+    migrations: (s) =>
+      `${definer(s, 'integer')}revoke execute on function ${s}.f(int) from public, anon;\n${definer(s, 'integer').replace('create function', 'create or replace function')}`,
+    reported: [],
+  },
+];
+
+describe('check c without --db reaches the verdict of the database', () => {
+  it.each(VERDICTS)('without --db: $name', async ({ migrations, reported }) => {
+    const findings = await audit({ [FIRST]: migrations('public') });
+    // Each finding's fix names the exact signature of its overload.
+    expect(findings.map((f) => /^revoke execute on function public\.(.+) from public, anon;$/m.exec(f.fix.snippet!.code)?.[1])).toEqual(reported);
+  });
+});
+
+describe('check c with --db on the same migrations, on the demo stack', () => {
+  let fx: Fixture;
+  const roles: string[] = [];
+  const schemas: string[] = [];
+  let findings: Finding[];
+
+  beforeAll(async () => {
+    fx = await openFixture();
+    // Supabase's own default privileges for functions postgres creates in public, which each
+    // fixture role gets in its own schema.
+    const { rows } = await fx.sql(`
+      select string_agg(case when a.grantee = 0 then 'public' else quote_ident(pg_get_userbyid(a.grantee)) end, ', ') as grantees
+      from pg_default_acl d, aclexplode(d.defaclacl) a
+      where d.defaclrole = 'postgres'::regrole and d.defaclnamespace = 'public'::regnamespace
+        and d.defaclobjtype = 'f' and a.privilege_type = 'EXECUTE'`);
+    const grantees = rows[0].grantees as string;
+    expect(grantees.split(', ')).toContain('anon');
+    for (const { migrations } of VERDICTS) {
+      const role = randomName('test_role');
+      roles.push(role);
+      const schema = schemas.length === 0 ? fx.schema : await fx.newSchema();
+      schemas.push(schema);
+      await fx.sql(`create role ${role} nologin; grant ${role} to postgres; grant usage, create on schema ${schema} to ${role};`);
+      await fx.sql(`alter default privileges for role ${role} in schema ${schema} grant execute on functions to ${grantees}`);
+      await fx.sql(`set role ${role}`);
+      try {
+        await fx.sql(migrations(schema));
+      } finally {
+        await fx.sql('reset role');
+      }
+    }
+    findings = await functionsCheck.run(fx.context(schemas));
+  });
+
+  afterAll(async () => {
+    try {
+      for (const role of roles) await fx?.sql(`drop owned by ${role}; drop role ${role};`);
+    } finally {
+      await fx?.close();
+    }
+  });
+
+  it.each(VERDICTS.map((verdict, i) => ({ ...verdict, i })))('with --db: $name', ({ reported, i }) => {
+    const schema = schemas[i]!;
+    // The finding that anon can execute it; the one for authenticated, which Supabase's default
+    // in public also grants, is another matter.
+    const anon = inSchema(findings, schema).filter((f) => f.severity === 'critical');
+    expect(anon.map((f) => ('object' in f.location ? f.location.object.slice(schema.length + 1) : ''))).toEqual(reported);
   });
 });
