@@ -77,6 +77,10 @@ describe('check d on current files', () => {
       'supabase/src/x.ts': `const k = "${FAKE.sbSecret}";\n`,
       'docs/src/notes.md': `${FAKE.stripeLive}\n`,
     });
+    const owners = (await run(root)).map((f) => f.owner);
+    expect(new Set(owners)).toEqual(
+      new Set(["A secret key ships to every visitor's browser, so anyone can use it.", 'A secret key is saved in your code repository.']),
+    );
     expect(summary(await run(root))).toEqual([
       'critical app/page.tsx:1',
       'critical components/Pay.tsx:1',
@@ -115,6 +119,8 @@ describe('check d on current files', () => {
     const env = findings.find((f) => where(f) === '.env:1')!;
     expect(env.title).toBe(`Supabase service-role key ${mask(FAKE.serviceRoleJwt)} in a browser-exposed env variable`);
     expect(env.why).toContain('VITE_SUPABASE_SERVICE_KEY');
+    expect(env.owner).toBe("A secret key ships to every visitor's browser, so anyone can use it.");
+    expect(findings.find((f) => where(f) === 'server/.env:1')!.owner).toBe('A secret key is saved in your code repository.');
   });
 
   it('gives one finding per secret per file, at its first line, critical if any line ships it', async () => {
@@ -188,6 +194,8 @@ describe('check d on the history', () => {
     const findings = await run(path.join(root, 'app'));
     expect(summary(findings)).toEqual(['high scripts/kept.ts:1', 'manual src/config.ts:2']);
     const manual = findings.find((f) => f.kind === 'manual')!;
+    expect(manual.owner).toBeUndefined();
+    expect('owner' in manual).toBe(false);
     expect(manual.why).toBe(
       `Rotate this key: it is in the git history at ${added} src/config.ts, and the history keeps it after any fix; the tool cannot see whether you rotated it.`,
     );

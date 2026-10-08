@@ -245,6 +245,7 @@ export const migrationsCheck: Check = {
         findings.push({
           check: 'f',
           severity: 'low',
+          owner: 'A database change could break the live app while it updates.',
           title: rule.title,
           location: { file, line },
           why: `${rule.message} A migration that has been applied cannot be undone, so this is reported to catch the next one before it ships.`,

@@ -33,6 +33,7 @@ describe('check a: tables without RLS', () => {
     expect(notes).toMatchObject({
       check: 'a',
       severity: 'critical',
+      owner: 'Anyone on the internet can read or change data in your database.',
       title: `Table ${fx.schema}.open_notes has row level security off`,
       location: { object: `${fx.schema}.open_notes` },
     });

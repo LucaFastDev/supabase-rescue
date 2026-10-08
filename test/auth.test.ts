@@ -34,6 +34,7 @@ describe('check e: config.toml', () => {
     expect(findings.map((f) => [f.severity, f.location, f.title])).toEqual([
       ['medium', { file: 'supabase/config.toml', line: 9 }, 'Email confirmation is off in config.toml'],
     ]);
+    expect(findings[0]!.owner).toBe('New accounts are not asked to confirm their email address.');
     expect(findings[0]!.fix.snippet).toEqual({ language: 'toml', code: '[auth.email]\nenable_confirmations = true\n' });
   });
 
@@ -52,6 +53,7 @@ describe('check e: manual entries', () => {
   it('always lists the five dashboard checks once, with where to look', async () => {
     const findings = await run(await tempDir());
     expect(findings).toEqual(MANUAL_CHECKS);
+    expect(findings.every((f) => !('owner' in f))).toBe(true);
     expect(findings.map((f) => [f.kind, f.title, 'object' in f.location && f.location.object])).toEqual([
       ['manual', 'Confirm email is on', 'Supabase dashboard: Authentication > Sign In / Providers > Email'],
       ['manual', 'Secure email change is on', 'Supabase dashboard: Authentication > Sign In / Providers > Email'],
@@ -106,6 +108,7 @@ describe('check e: routes', () => {
       ['Route /dashboard renders data without an auth check', 'src/App.tsx:15'],
       ['Route /later renders data without an auth check', 'src/App.tsx:25'],
     ]);
+    expect(findings.filter((f) => f.kind === 'review').every((f) => !('owner' in f))).toBe(true);
     expect(findings[0]!.why).toContain('src/pages/Dashboard.tsx');
   });
 

@@ -95,6 +95,7 @@ describe('check k on the demo stack', () => {
       expect(finding).toMatchObject({
         check: 'k',
         severity: 'high',
+        owner: 'Files you meant to keep private can be opened by anyone who has their link.',
         title: 'Public storage bucket with a read policy that does not protect its files',
         location: { object: `storage.buckets/${name()}` },
       });

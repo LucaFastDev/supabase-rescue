@@ -123,6 +123,7 @@ describe('check b: permissive policies, on the demo stack', () => {
       expect.objectContaining({
         check: 'b',
         severity: 'critical',
+        owner: 'Anyone on the internet can read or change records they should not reach.',
         title: `Policy "anon insert" lets anyone add any row in ${fx.schema}.notes`,
         location: { object: `${fx.schema}.notes policy "anon insert"` },
       }),
@@ -149,6 +150,7 @@ describe('check b: permissive policies, on the demo stack', () => {
 
   it('reports an authenticated UPDATE with true and a null with_check as high', () => {
     expect(at('authenticated update').map((f) => f.severity)).toEqual(['high']);
+    expect(at('authenticated update')[0]!.owner).toBe("Any signed-in user can see or change other people's records.");
     expect(at('authenticated update')[0]!.title).toBe(
       `Policy "authenticated update" lets any signed-in user change any row in ${fx.schema}.notes`,
     );
@@ -161,6 +163,7 @@ describe('check b: permissive policies, on the demo stack', () => {
   it('reports an anon SELECT with true as medium, with a fix that says how to decide', () => {
     const [finding] = at('anon select');
     expect(finding?.severity).toBe('medium');
+    expect(finding!.owner).toBe('Anyone on the internet can read every row of one of your tables.');
     expect(finding!.fix.text).toMatch(/^Decide whether this data is meant to be public/);
   });
 

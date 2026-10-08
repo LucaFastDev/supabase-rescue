@@ -124,6 +124,7 @@ describe('paidApisCheck', () => {
     expect(findings[0]).toMatchObject({
       check: 'h',
       title: 'Anyone can run up your OpenAI bill through the summarise-weeks edge function',
+      owner: 'Anyone on the internet can run up your bill with a paid service.',
     });
     expect(findings[0]!.why).toContain('line 5');
     expect(findings[0]!.checkBefore).not.toBe('');

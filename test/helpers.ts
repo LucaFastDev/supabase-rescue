@@ -12,7 +12,7 @@ export const RANK_CASES: { rank: Severity | Kind; exitCode: 0 | 1 }[] = [
 /** A finding of the given severity or kind, with placeholder text. */
 export function finding(
   rank: Severity | Kind,
-  fields: { check?: CheckId; title?: string; location?: Location } = {},
+  fields: { check?: CheckId; title?: string; location?: Location; owner?: string } = {},
 ): Finding {
   const base = {
     check: fields.check ?? 'a',
@@ -22,5 +22,7 @@ export function finding(
     fix: { text: 'How to fix it.' },
     checkBefore: 'What to check first.',
   };
-  return rank === 'review' || rank === 'manual' ? { ...base, kind: rank } : { ...base, severity: rank };
+  return rank === 'review' || rank === 'manual'
+    ? { ...base, kind: rank }
+    : { ...base, severity: rank, owner: fields.owner ?? `Owner sentence for a ${rank} finding.` };
 }

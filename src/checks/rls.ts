@@ -24,6 +24,7 @@ function rlsOff(table: TableRow): Finding {
   return {
     check: 'a',
     severity: 'critical',
+    owner: 'Anyone on the internet can read or change data in your database.',
     title: `Table ${name} has row level security off`,
     location: { object: name },
     why: `The ${table.schema} schema is exposed through the Data API, and this table has row level security off, so no per-row rule protects it. With Supabase's default grants, anyone who has your anon key, which ships inside your app to every visitor, can read, change and delete every row of it.`,

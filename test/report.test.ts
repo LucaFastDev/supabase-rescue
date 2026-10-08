@@ -23,6 +23,8 @@ describe('renderMarkdown', () => {
       [
         '# Audit report',
         '',
+        '**No problems found in what this tool can read.**',
+        '',
         '**Summary:** 0 critical, 0 high, 0 medium, 0 low; 0 to review, 0 manual actions.',
         '',
         'Target: `demo`. Tool: supabase-rescue 0.1.0.',
@@ -90,6 +92,7 @@ describe('renderMarkdown', () => {
     const withSnippet: Finding = {
       check: 'a',
       severity: 'critical',
+      owner: 'Anyone on the internet can read or change data in your database.',
       title: 'Table public.notes has RLS off',
       location: { object: 'public.notes' },
       why: 'Anyone with the anon key can read and change every row.',
@@ -139,6 +142,138 @@ describe('renderMarkdown', () => {
       ),
     ).get('High')!;
     expect(body.indexOf('### First')).toBeLessThan(body.indexOf('### Second'));
+  });
+});
+
+/** report.md from `# Audit report` through the `**Summary:**` line. */
+function opening(markdown: string): string {
+  return markdown.split('\n\nTarget:')[0]!;
+}
+
+describe('the owner summary', () => {
+  it('says no problems were found when there are no findings', () => {
+    expect(opening(renderMarkdown([], meta))).toBe(
+      [
+        '# Audit report',
+        '',
+        '**No problems found in what this tool can read.**',
+        '',
+        '**Summary:** 0 critical, 0 high, 0 medium, 0 low; 0 to review, 0 manual actions.',
+      ].join('\n'),
+    );
+  });
+
+  it('says not ready, with one line per different problem and the plural manual line', () => {
+    const findings = [
+      finding('medium', { owner: 'Medium sentence.' }),
+      finding('manual'),
+      finding('critical', { owner: 'Critical sentence.' }),
+      finding('manual'),
+      finding('high', { owner: 'High sentence.' }),
+    ];
+    expect(opening(renderMarkdown(findings, meta))).toBe(
+      [
+        '# Audit report',
+        '',
+        "**Not ready to launch yet:** these problems could expose your customers' data or cost you money.",
+        '',
+        '- Critical sentence.',
+        '- High sentence.',
+        '- Medium sentence.',
+        '',
+        "2 things this tool can't see need checking by hand, listed under Manual actions.",
+        '',
+        '**Summary:** 1 critical, 1 high, 1 medium, 0 low; 0 to review, 2 manual actions.',
+      ].join('\n'),
+    );
+  });
+
+  it('says nearly ready for medium and low findings, with the singular manual line', () => {
+    const findings = [
+      finding('low', { owner: 'Low sentence.' }),
+      finding('medium', { owner: 'Medium sentence.' }),
+      finding('manual'),
+    ];
+    expect(opening(renderMarkdown(findings, meta))).toBe(
+      [
+        '# Audit report',
+        '',
+        '**Nearly ready:** nothing urgent, but fix these before you grow.',
+        '',
+        '- Medium sentence.',
+        '- Low sentence.',
+        '',
+        "1 thing this tool can't see needs checking by hand, listed under Manual actions.",
+        '',
+        '**Summary:** 0 critical, 0 high, 1 medium, 1 low; 0 to review, 1 manual actions.',
+      ].join('\n'),
+    );
+  });
+
+  it('shows an identical sentence once and at most three bullets, in sort order', () => {
+    const findings = [
+      finding('low', { check: 'a', owner: 'Fourth sentence.' }),
+      finding('medium', { check: 'a', owner: 'Third sentence.' }),
+      finding('high', { check: 'c', owner: 'Second sentence.' }),
+      finding('high', { check: 'b', owner: 'Second sentence.' }),
+      finding('critical', { check: 'a', owner: 'First sentence.' }),
+    ];
+    expect(opening(renderMarkdown(findings, meta))).toBe(
+      [
+        '# Audit report',
+        '',
+        "**Not ready to launch yet:** these problems could expose your customers' data or cost you money.",
+        '',
+        '- First sentence.',
+        '- Second sentence.',
+        '- Third sentence.',
+        '',
+        '**Summary:** 1 critical, 2 high, 1 medium, 1 low; 0 to review, 0 manual actions.',
+      ].join('\n'),
+    );
+  });
+
+  it('has no bullets without a severity finding, and a review line beside the manual line', () => {
+    const findings = [finding('manual'), finding('review'), finding('manual'), finding('manual')];
+    expect(opening(renderMarkdown(findings, meta))).toBe(
+      [
+        '# Audit report',
+        '',
+        '**No problems found in what this tool can read.**',
+        '',
+        '1 thing needs a person to look at, listed under Review.',
+        '',
+        "3 things this tool can't see need checking by hand, listed under Manual actions.",
+        '',
+        '**Summary:** 0 critical, 0 high, 0 medium, 0 low; 1 to review, 3 manual actions.',
+      ].join('\n'),
+    );
+  });
+
+  it('says how many things need a person to look at in the plural', () => {
+    expect(opening(renderMarkdown([finding('review'), finding('review')], meta))).toContain(
+      '\n2 things need a person to look at, listed under Review.\n',
+    );
+  });
+
+  it('refuses a severity finding without an owner sentence', () => {
+    // @ts-expect-error a finding with a severity must carry owner
+    const withoutOwner: Finding = {
+      check: 'a',
+      severity: 'low',
+      title: 'No owner',
+      location: { object: 'public.notes' },
+      why: 'Why.',
+      fix: { text: 'Fix.' },
+      checkBefore: 'Check.',
+    };
+    expect(withoutOwner.owner).toBeUndefined();
+  });
+
+  it('keeps the owner sentence in report.json and out of the finding sections', () => {
+    const f = finding('high', { owner: 'The owner sentence.' });
+    expect(JSON.parse(renderJson([f], meta)).findings[0].owner).toBe('The owner sentence.');
+    expect(sections(renderMarkdown([f], meta)).get('High')).not.toContain('The owner sentence.');
   });
 });
 

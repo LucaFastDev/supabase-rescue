@@ -200,7 +200,11 @@ describe('paymentsCheck', () => {
     const findings = await run(root);
     const line = FLAWED_CHECKOUT.split('\n').findIndex((l) => l.includes('unit_amount: body.price')) + 1;
     expect(summary(findings)).toEqual([`critical supabase/functions/checkout/index.ts:${line}`]);
-    expect(findings[0]).toMatchObject({ check: 'g', title: 'Stripe charges an amount the browser sent' });
+    expect(findings[0]).toMatchObject({
+      check: 'g',
+      title: 'Stripe charges an amount the browser sent',
+      owner: 'A customer can pay €1 for a €100 booking.',
+    });
     expect(findings[0]!.checkBefore).not.toBe('');
   });
 
@@ -215,7 +219,11 @@ describe('paymentsCheck', () => {
     await writeFiles(root, { 'supabase/functions/hook/index.ts': UNVERIFIED_WEBHOOK });
     const findings = await run(root);
     expect(summary(findings)).toEqual(['critical supabase/functions/hook/index.ts:2']);
-    expect(findings[0]).toMatchObject({ check: 'g', title: "Stripe webhook handler does not verify Stripe's signature" });
+    expect(findings[0]).toMatchObject({
+      check: 'g',
+      title: "Stripe webhook handler does not verify Stripe's signature",
+      owner: 'Anyone can mark an order as paid without paying.',
+    });
   });
 
   it('g2 does not trigger: a handler that calls constructEventAsync finds nothing', async () => {
@@ -236,6 +244,7 @@ describe('paymentsCheck', () => {
     const findings = await run(root);
     expect(summary(findings)).toEqual(['high .env.production:2']);
     expect(findings[0]!.title).toContain('…');
+    expect(findings[0]!.owner).toBe('Your live checkout uses a Stripe test key, so it takes no real money.');
     expect(JSON.stringify(findings)).not.toContain(STRIPE_PUBLISHABLE.test);
   });
 

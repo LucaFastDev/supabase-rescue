@@ -88,6 +88,13 @@ export const policiesCheck: Check = {
   },
 };
 
+// policyProblem never returns low, so there is no sentence for it.
+const OWNER: Partial<Record<Severity, string>> = {
+  critical: 'Anyone on the internet can read or change records they should not reach.',
+  high: "Any signed-in user can see or change other people's records.",
+  medium: 'Anyone on the internet can read every row of one of your tables.',
+};
+
 const VERB: Record<Access, string> = {
   select: 'read every row',
   insert: 'add any row',
@@ -125,6 +132,7 @@ function permissivePolicy(policy: PolicyRow, problem: PolicyProblem): Finding {
   return {
     check: 'b',
     severity: problem.severity,
+    owner: OWNER[problem.severity]!,
     title,
     location: { object: name },
     why,
