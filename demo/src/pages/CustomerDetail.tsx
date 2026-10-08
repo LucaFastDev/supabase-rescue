@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
+import { safeFileName } from "@/lib/safe-file-name";
 import { formatDateTime, type Appointment, type Customer } from "@/lib/types";
 
 const PHOTOS = "customer-photos";
@@ -35,7 +36,9 @@ const CustomerDetail = () => {
     const file = input.files?.[0];
     if (!id || !file) return;
     setPhotoError(null);
-    const { error } = await supabase.storage.from(PHOTOS).upload(`${id}/${crypto.randomUUID()}-${file.name}`, file);
+    const { error } = await supabase.storage
+      .from(PHOTOS)
+      .upload(`${id}/${crypto.randomUUID()}-${safeFileName(file.name)}`, file);
     input.value = "";
     if (error) {
       setPhotoError("The photo could not be added.");
