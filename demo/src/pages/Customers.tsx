@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { supabase } from "@/integrations/supabase/client";
+import { supabaseAdmin } from "@/integrations/supabase/admin";
 import type { Customer } from "@/lib/types";
 
 const Customers = () => {
@@ -9,8 +9,8 @@ const Customers = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // The signed-in staff member's own session: the "Staff read customers" policy lets staff read every customer.
-    supabase
+    // The admin client reads every customer, whatever the policies say.
+    supabaseAdmin
       .from("customers")
       .select("id, full_name, phone, email, created_at")
       .order("full_name")

@@ -5,9 +5,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
-import { SERVICES, SERVICE_PRICES, bookingReference, type Service } from "@/lib/types";
+import { SERVICES, SERVICE_PRICES, bookingReference, formatDateTime, type Service } from "@/lib/types";
 
 const pounds = (pence: number) => `£${(pence / 100).toFixed(2)}`;
+
+interface UpcomingBooking {
+  starts_at: string;
+  service: string;
+  status: string;
+}
 
 const Book = () => {
   const [signedIn, setSignedIn] = useState(false);
@@ -16,6 +22,9 @@ const Book = () => {
   const [reference, setReference] = useState<string | null>(null);
   const [booked, setBooked] = useState<{ id: string; service: Service } | null>(null);
   const [paying, setPaying] = useState(false);
+  const [lookupPhone, setLookupPhone] = useState("");
+  const [bookings, setBookings] = useState<UpcomingBooking[] | null>(null);
+  const [lookupError, setLookupError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSignedIn(data.session !== null));
@@ -55,7 +64,7 @@ const Book = () => {
     setPaying(true);
     setMessage(null);
     const { data, error } = await supabase.functions.invoke("create-checkout", {
-      body: { appointmentId: booked.id },
+      body: { appointmentId: booked.id, service: booked.service, price: SERVICE_PRICES[booked.service] },
     });
     setPaying(false);
     if (error) {
@@ -63,6 +72,18 @@ const Book = () => {
       return;
     }
     window.location.assign(data.url);
+  };
+
+  const findBookings = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLookupError(null);
+    const { data, error } = await supabase.rpc("appointments_for_phone", { phone_number: lookupPhone });
+    if (error) {
+      setBookings(null);
+      setLookupError(`Sorry, we could not look that up: ${error.message}`);
+      return;
+    }
+    setBookings((data ?? []) as UpcomingBooking[]);
   };
 
   return (
@@ -137,6 +158,40 @@ const Book = () => {
                 )}
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Find my booking</CardTitle>
+            <CardDescription>Enter the phone number you booked with to see your upcoming appointments.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            <form className="flex gap-2" onSubmit={findBookings}>
+              <Input
+                aria-label="Phone"
+                type="tel"
+                value={lookupPhone}
+                onChange={(event) => setLookupPhone(event.target.value)}
+                required
+              />
+              <Button type="submit" variant="secondary">
+                Find
+              </Button>
+            </form>
+            {lookupError && <p className="text-sm text-destructive">{lookupError}</p>}
+            {bookings !== null &&
+              (bookings.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No upcoming appointments for that number.</p>
+              ) : (
+                <ul className="grid gap-1 text-sm">
+                  {bookings.map((booking) => (
+                    <li key={booking.starts_at}>
+                      {formatDateTime(booking.starts_at)}: {booking.service} ({booking.status})
+                    </li>
+                  ))}
+                </ul>
+              ))}
           </CardContent>
         </Card>
       </main>
