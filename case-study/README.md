@@ -21,7 +21,7 @@ Juniper & Ash Hair Studio is a fictional salon with the kind of app Lovable buil
 | Sign up with someone else's email address. | Medium | Email confirmation is on in the app's settings file. The same switch in the Supabase dashboard is on the to-do list below. |
 | Open the Reports page without signing in. | Needed a decision: the page might have been meant to be public | Reports are behind the staff sign-in. |
 | Pay £1 for a £120 balayage: the checkout charged whatever price the booking page sent, and anyone can change that. | Critical | Checkout looks up the service's price itself. The booking page only says which booking is being paid for. |
-| Run up the salon's OpenAI bill by calling the Reports page's AI summary over and over, without signing in. | High | The AI summary refuses anyone who is not signed in as staff, before it calls OpenAI. |
+| Run up the salon's OpenAI bill by calling the Reports page's AI summary over and over, without signing in. | High | Before it calls OpenAI, the AI summary refuses anyone who is not signed in ([the launch fixes](https://github.com/LucaFastDev/supabase-rescue/pull/46)), and anyone signed in who is not on the salon's staff ([the staff-only fix](https://github.com/LucaFastDev/supabase-rescue/pull/59)). |
 | Open a customer's photo with its link. The photos looked private, since staff saw only their own, but they were in a public folder. | High | The photo folder is private. Staff see the photos through links that stop working after an hour. |
 | (Not a stranger, but it would have broken the app at launch.) Staff password-reset emails went through Supabase's email service for testing, which sends about two an hour and only to the project's own team, so they would stop arriving once the salon used the app. | High | Sign-in emails go through the salon's own email provider, set in the app's settings file. The same setting in the Supabase dashboard is on the to-do list below. |
 | (Not a stranger, but the same kind of mistake.) An earlier update removed a column the app still read. The notes in it were moved first, but every browser tab already open on the app broke the moment it ran. | Low | An update that has run cannot be undone. A new check stops the next one like it before it ships. |
@@ -35,7 +35,7 @@ Each of these has an obvious fix, and the obvious fix often breaks the app.
 - **Deleting the master key from the code does not get rid of it.** It stays in the project's history, where anyone with a copy of the code can find it. The key has to be replaced in Supabase, and everything that uses it given the new one first.
 - **Some features cannot be made safe as they are.** "Find my booking" by phone number could not be locked down without breaking it, so it was redesigned around a booking reference.
 
-The fixes came as two tested changes to the app, the way you would receive them: [the database fixes](https://github.com/LucaFastDev/supabase-rescue/pull/10) and [the launch fixes](https://github.com/LucaFastDev/supabase-rescue/pull/46).
+The fixes came as three tested changes to the app, the way you would receive them: [the database fixes](https://github.com/LucaFastDev/supabase-rescue/pull/10), [the launch fixes](https://github.com/LucaFastDev/supabase-rescue/pull/46) and [the staff-only fix to the AI summary](https://github.com/LucaFastDev/supabase-rescue/pull/59).
 
 ## After the fix
 
