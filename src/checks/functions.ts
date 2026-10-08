@@ -6,8 +6,8 @@
 //
 // Without --db it reads supabase/migrations/*.sql instead, and finds one problem only: a SECURITY
 // DEFINER function in an exposed schema that the migrations do not revoke from both PUBLIC and
-// anon, or that a migration grants to anon and no later one revokes from anon, is high. With --db
-// the catalog is authoritative and the migrations are not read.
+// anon, or that a migration grants to anon and no later one revokes from anon, is high, one finding
+// per overload. With --db the catalog is authoritative and the migrations are not read.
 
 import { catalogFor } from '../catalog.ts';
 import type { FunctionRow } from '../catalog.ts';
@@ -119,7 +119,8 @@ function exposedFunction(fn: FunctionRow, problems: FunctionProblem[]): Finding 
 }
 
 // Without --db: the migrations' create function, drop function, grant and revoke statements, in
-// order. `at` is a statement's position across every migration, in filename order.
+// order. `at` is a statement's position across every migration, in filename order. Each overload
+// is a function of its own, known by its signature: schema.name(argument types).
 
 interface Created {
   at: number;
@@ -132,10 +133,23 @@ interface Created {
   line: number;
 }
 
+/** A signature that exists at a point in the migrations. */
+interface Live {
+  /** schema.name, shared by its overloads. */
+  key: string;
+  /**
+   * The create that made it while no function of its signature existed. A drop and a new create
+   * give it a fresh ACL, but `create or replace` of an existing function keeps its ACL.
+   */
+  born: number;
+  /** Its latest create, which decides whether it is a definer and where it is reported. */
+  create: Created;
+}
+
 interface Privilege {
   at: number;
   grant: boolean;
-  /** schema.name of each function it names, or none for `all functions in schema`. */
+  /** The signature of each function it names, where that resolves to one; none for `all functions in schema`. */
   functions: string[];
   /** The schemas of `all functions in schema`. */
   schemas: string[];
@@ -190,6 +204,84 @@ function splitList(list: string): string[] {
   return items.map((item) => item.trim()).filter(Boolean);
 }
 
+// A type of more than one word, which an argument can start with when it has no name.
+const MULTI_WORD_TYPE =
+  /^(?:double\s+precision|(?:national\s+)?(?:character|char)\s+varying|national\s+(?:character|char)|bit\s+varying|(?:timestamp|time)\s*(?:\(\s*\d+\s*\)\s*)?with(?:out)?\s+time\s+zone|interval\s+(?:year|month|day|hour|minute|second))\b/i;
+const FIRST_WORD = new RegExp(String.raw`^(${IDENT})\s+(?=[^\s\[(.])`);
+const MODE = /^(in|out|inout|variadic)\s+/i;
+
+/** The names Postgres prints for the usual aliases of a type. */
+const TYPE_NAMES: Record<string, string> = {
+  int: 'integer',
+  int4: 'integer',
+  int2: 'smallint',
+  int8: 'bigint',
+  bool: 'boolean',
+  float: 'double precision',
+  float8: 'double precision',
+  float4: 'real',
+  decimal: 'numeric',
+  varchar: 'character varying',
+  'char varying': 'character varying',
+  'national character varying': 'character varying',
+  'national char varying': 'character varying',
+  char: 'character',
+  bpchar: 'character',
+  'national character': 'character',
+  'national char': 'character',
+  varbit: 'bit varying',
+  timestamp: 'timestamp without time zone',
+  timestamptz: 'timestamp with time zone',
+  time: 'time without time zone',
+  timetz: 'time with time zone',
+};
+
+/**
+ * The type of one written argument, as it counts in a signature, or undefined for an OUT argument,
+ * which is not part of the signature. Its mode, name, type modifiers and the schema pg_catalog or
+ * public are left out, and an alias becomes the name Postgres prints.
+ */
+function argType(arg: string): string | undefined {
+  let rest = arg.trim();
+  const mode = MODE.exec(rest);
+  if (mode) {
+    if (mode[1]!.toLowerCase() === 'out') return undefined;
+    rest = rest.slice(mode[0].length);
+  }
+  const first = FIRST_WORD.exec(rest);
+  if (first && !MULTI_WORD_TYPE.test(rest)) rest = rest.slice(first[0].length);
+  const type = rest
+    .replace(/"/g, '')
+    .toLowerCase()
+    .replace(/\(\s*\d+(?:\s*,\s*\d+)?\s*\)/g, '')
+    .replace(/\s*\[\s*\d*\s*\]/g, '[]')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^(?:pg_catalog|public)\s*\.\s*/, '');
+  const array = type.indexOf('[');
+  const base = array < 0 ? type : type.slice(0, array);
+  return (TYPE_NAMES[base] ?? base) + (array < 0 ? '' : type.slice(array));
+}
+
+/** schema.name(argument types): what tells one overload from another. */
+function signatureOf(key: string, args: string): string {
+  return `${key}(${splitList(args).flatMap((arg) => argType(arg) ?? []).join(', ')})`;
+}
+
+/**
+ * The function a written name refers to among the live ones, as Postgres would resolve it: the
+ * signature it names, or with no argument list the one overload of that name, if there is one.
+ */
+function resolve(written: string, live: Map<string, Live>): string | undefined {
+  const key = functionKey(written);
+  if (!key) return undefined;
+  const rest = written.slice(NAME.exec(written)![0].length);
+  const open = /^\s*\(/.exec(rest);
+  if (open) return signatureOf(key, rest.slice(open[0].length, rest.lastIndexOf(')')));
+  const overloads = [...live].filter(([, fn]) => fn.key === key);
+  return overloads.length === 1 ? overloads[0]![0] : undefined;
+}
+
 function roleList(written: string): string[] {
   const roles = written
     .replace(/\s+(?:cascade|restrict)\s*$/i, '')
@@ -227,8 +319,8 @@ function parseCreate(code: string, file: string, line: number, at: number): Crea
 }
 
 async function repoOnlyFindings(context: CheckContext): Promise<Finding[]> {
-  const created = new Map<string, Created>();
-  const dropped = new Map<string, number>();
+  // By signature, the functions that exist after the statements read so far.
+  const live = new Map<string, Live>();
   const privileges: Privilege[] = [];
   const defaultRevokes: DefaultRevoke[] = [];
 
@@ -238,14 +330,16 @@ async function repoOnlyFindings(context: CheckContext): Promise<Finding[]> {
       at++;
       const create = parseCreate(code, file, line, at);
       if (create) {
-        created.set(`${create.schema}.${create.name}`, create);
+        const key = `${create.schema}.${create.name}`;
+        const signature = signatureOf(key, create.args);
+        live.set(signature, { key, born: live.get(signature)?.born ?? at, create });
         continue;
       }
       const drop = DROP.exec(code);
       if (drop) {
         for (const item of splitList(drop[1]!)) {
-          const key = functionKey(item);
-          if (key) dropped.set(key, at);
+          const signature = resolve(item, live);
+          if (signature) live.delete(signature);
         }
         continue;
       }
@@ -255,7 +349,7 @@ async function repoOnlyFindings(context: CheckContext): Promise<Finding[]> {
         privileges.push({
           at,
           grant: privilege[1]!.toLowerCase() === 'grant',
-          functions: privilege[3] ? splitList(privilege[3]).flatMap((item) => functionKey(item) ?? []) : [],
+          functions: privilege[3] ? splitList(privilege[3]).flatMap((item) => resolve(item, live) ?? []) : [],
           schemas: privilege[4] ? splitList(privilege[4]).map(unquote) : [],
           roles: roleList(privilege[5]!),
         });
@@ -270,21 +364,27 @@ async function repoOnlyFindings(context: CheckContext): Promise<Finding[]> {
 
   const exposed = new Set(context.exposedSchemas.map((s) => s.toLowerCase()));
   const findings: Finding[] = [];
-  for (const [key, fn] of created) {
-    if (!fn.definer || !exposed.has(fn.schema) || (dropped.get(key) ?? 0) > fn.at) continue;
+  for (const [signature, { born, create: fn }] of live) {
+    if (!fn.definer || !exposed.has(fn.schema)) continue;
     const revokes = privileges.filter((p) => !p.grant);
-    // A revoke that removes `role`'s execute on this function, placed after `after`.
+    // A revoke that removes `role`'s execute on this function, placed after `after`. One before
+    // `born` was on an earlier function of this signature, since dropped.
     const revokedFrom = (role: string, after: number) =>
-      revokes.some((p) => p.at > after && p.roles.includes(role) && (p.functions.includes(key) || p.schemas.includes(fn.schema)));
-    // Whether the migrations revoke `role`'s execute on this function, in any of the three forms.
-    const revoked = (role: string) =>
-      revokes.some((p) => p.roles.includes(role) && (p.functions.includes(key) || (p.at > fn.at && p.schemas.includes(fn.schema)))) ||
-      defaultRevokes.some((d) => d.at < fn.at && d.roles.includes(role) && (d.schemas === null || d.schemas.includes(fn.schema)));
+      revokes.some((p) => p.at > Math.max(after, born) && p.roles.includes(role) && (p.functions.includes(signature) || p.schemas.includes(fn.schema)));
+    // Postgres adds per-schema default privileges to the global ones, and a revoke in one cannot
+    // remove a grant in the other. PUBLIC's EXECUTE comes from the built-in global default, so only
+    // a global revoke removes it. On Supabase, anon's own EXECUTE comes from a per-schema default,
+    // as it does in public, so only a revoke in the function's schema removes it.
+    const defaultRevoked = (role: string) =>
+      defaultRevokes.some(
+        (d) => d.at < born && d.roles.includes(role) && (role === 'public' ? d.schemas === null : d.schemas?.includes(fn.schema)),
+      );
+    const revoked = (role: string) => revokedFrom(role, born) || defaultRevoked(role);
     // On Supabase, default privileges in public grant anon its own EXECUTE on each new function, so
     // a revoke from PUBLIC alone still leaves anon able to call it.
     const covered = revoked('public') && revoked('anon');
     const grantedToAnon = privileges.some(
-      (p) => p.grant && p.functions.includes(key) && p.roles.includes('anon') && !revokedFrom('anon', p.at),
+      (p) => p.grant && p.at > born && p.functions.includes(signature) && p.roles.includes('anon') && !revokedFrom('anon', p.at),
     );
     if (covered && !grantedToAnon) continue;
     findings.push(repoOnlyFinding(fn, grantedToAnon ? 'granted-to-anon' : revoked('public') ? 'anon-not-revoked' : 'public-not-revoked'));
