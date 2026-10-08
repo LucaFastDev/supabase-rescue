@@ -55,7 +55,7 @@ const Book = () => {
     setPaying(true);
     setMessage(null);
     const { data, error } = await supabase.functions.invoke("create-checkout", {
-      body: { appointmentId: booked.id, service: booked.service, price: SERVICE_PRICES[booked.service] },
+      body: { appointmentId: booked.id },
     });
     setPaying(false);
     if (error) {

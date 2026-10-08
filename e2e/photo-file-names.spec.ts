@@ -52,7 +52,7 @@ for (const name of NAMES) {
     );
     expect(added).toHaveLength(1);
     // The stored file keeps its extension: the name is not cut short at a "#" or "?".
-    expect(added[0]).toMatch(/\.png$/);
+    expect(new URL(added[0]!).pathname).toMatch(/\.png$/);
     const image = photos.and(page.locator(`img[src="${added[0]}"]`));
     await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBeGreaterThan(0);
 
