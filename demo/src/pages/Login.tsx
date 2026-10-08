@@ -21,6 +21,7 @@ const Login = () => {
       setError("Enter your email address first.");
       return;
     }
+    // FLAW (check i): config.toml sets up no SMTP server, so this reset email goes through Supabase's built-in email service, which sends about 2 emails an hour and only to the project's own team, so a real staff member who forgets their password never gets the link.
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });

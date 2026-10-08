@@ -10,23 +10,25 @@ import NotFound from "@/pages/NotFound";
 import Reports from "@/pages/Reports";
 import ResetPassword from "@/pages/ResetPassword";
 import StaffNotes from "@/pages/StaffNotes";
-
 const App = () => (
   <BrowserRouter>
     <Routes>
       <Route path="/" element={<Book />} />
       <Route path="/login" element={<Login />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<StaffLayout />}>
           <Route path="/appointments" element={<Appointments />} />
           <Route path="/customers" element={<Customers />} />
           <Route path="/customers/:id" element={<CustomerDetail />} />
           <Route path="/customers/:id/notes" element={<StaffNotes />} />
-          {/* Fixed (check e): Reports now sits inside ProtectedRoute like every other staff page. */}
-          <Route path="/reports" element={<Reports />} />
         </Route>
       </Route>
+      <Route element={<StaffLayout />}>
+        {/* FLAW (check e): Reports was added later, inside the staff layout for its navigation but
+            outside ProtectedRoute, so the page renders for visitors who are not signed in. */}
+        <Route path="/reports" element={<Reports />} />
+      </Route>
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   </BrowserRouter>
