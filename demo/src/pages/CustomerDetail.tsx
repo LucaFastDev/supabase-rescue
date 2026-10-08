@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,8 @@ import { safeFileName } from "@/lib/safe-file-name";
 import { formatDateTime, type Appointment, type Customer } from "@/lib/types";
 
 const PHOTOS = "customer-photos";
+/** How long a photo's signed URL works, in seconds. */
+const SIGNED_FOR = 60 * 60;
 
 const CustomerDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -19,6 +21,7 @@ const CustomerDetail = () => {
   const [photos, setPhotos] = useState<string[]>([]);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const signedUrls = useRef(new Map<string, { url: string; renewAt: number }>());
 
   const loadPhotos = async (customerId: string) => {
     const { data, error } = await supabase.storage.from(PHOTOS).list(customerId);
@@ -28,7 +31,25 @@ const CustomerDetail = () => {
     }
     // Folders come back with no id; only files are photos.
     const files = (data ?? []).filter((item) => item.id !== null);
-    setPhotos(files.map((file) => supabase.storage.from(PHOTOS).getPublicUrl(`${customerId}/${file.name}`).data.publicUrl));
+    // The bucket is private, so each photo is shown through a signed URL, which expires. A photo
+    // keeps its URL until half of that time has passed, so adding a photo does not load the
+    // others again.
+    const now = Date.now();
+    const signed = await Promise.all(
+      files.map(async (file) => {
+        const path = `${customerId}/${file.name}`;
+        const known = signedUrls.current.get(path);
+        if (known && known.renewAt > now) return known.url;
+        const { data, error } = await supabase.storage.from(PHOTOS).createSignedUrl(path, SIGNED_FOR);
+        if (error) throw error;
+        signedUrls.current.set(path, { url: data.signedUrl, renewAt: now + (SIGNED_FOR * 1000) / 2 });
+        return data.signedUrl;
+      }),
+    ).catch((error: Error) => {
+      setError(error.message);
+      return null;
+    });
+    if (signed) setPhotos(signed);
   };
 
   const addPhoto = async (event: ChangeEvent<HTMLInputElement>) => {

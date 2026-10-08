@@ -1,9 +1,8 @@
-// Pins the fixed sample app, which on main also carries check g's, check h's, check i's and check
-// k's seeded flaws until the launch fixes land: the audit of demo/ with --db on the demo stack
-// finds five findings with a severity, the critical for g, the highs for h, i and k and the low for
-// the column check f's migration dropped (an applied migration cannot be undone), no review
-// entry, and as manual entries the dashboard auth checks, check i's two auth email checks, check
-// j's backups and plan check and one rotation of the service-role key the git history keeps. It
+// Pins the fixed sample app: the audit of demo/ with --db on the demo stack finds one finding with
+// a severity, the low for the column check f's migration dropped (an applied migration cannot be
+// undone), no review entry, and as manual entries the dashboard auth checks, check i's two auth
+// email checks, check j's backups and plan check and one rotation of the service-role key the git
+// history keeps. It
 // also checks what the fixed policies let each role do, and the booking page's reference. It
 // leaves nothing behind: the report goes to a temporary directory, and every statement run as a
 // role is rolled back.
@@ -44,35 +43,21 @@ describe('the audit of demo/, on the demo stack', () => {
 
   const isFixture = (f: Finding) => 'object' in f.location && isTestFixtureObject(f.location.object);
 
-  it("runs, and exits 1 because of checks g, h, i and k's seeded flaws alone", () => {
+  it('runs, and exits 0 when no fixture of another test file raises it', () => {
     expect(stderr).toBe('');
     // Other test files, running at the same time, can have a fixture table without RLS in public,
-    // which the audit sees as critical, or a fixture bucket check k reports. Those, and check g's,
-    // check h's, check i's and check k's seeded flaws, are the only findings allowed to raise the
-    // exit code.
+    // which the audit sees as critical, or a fixture bucket check k reports. Those are the only
+    // findings allowed to raise the exit code.
     const raising = all.filter((f) => f.severity === 'critical' || f.severity === 'high');
-    expect(raising.filter((f) => !isFixture(f)).map(summary)).toEqual([
-      ['g', 'critical', 'supabase/functions/create-checkout/index.ts'],
-      ['h', 'high', 'supabase/functions/summarise-weeks/index.ts'],
-      ['i', 'high', 'src/pages/Login.tsx'],
-      ['k', 'high', 'storage.buckets/customer-photos'],
-    ]);
+    expect(raising.filter((f) => !isFixture(f)).map(summary)).toEqual([]);
     expect(code).toBe(raising.length === 0 ? 0 : 1);
   });
 
-  it("finds the critical for check g's seeded flaw, the highs for checks h's, i's and k's and the low for the applied migration that dropped a column", () => {
+  it('finds only the low for the applied migration that dropped a column', () => {
     expect(findings.filter((f) => f.severity !== undefined).map(summary)).toEqual([
-      ['g', 'critical', 'supabase/functions/create-checkout/index.ts'],
-      ['h', 'high', 'supabase/functions/summarise-weeks/index.ts'],
-      ['i', 'high', 'src/pages/Login.tsx'],
-      ['k', 'high', 'storage.buckets/customer-photos'],
       ['f', 'low', 'supabase/migrations/20260915110000_staff_notes.sql'],
     ]);
-    expect(findings.find((f) => f.check === 'k')!.title).toBe('Public storage bucket with a read policy that does not protect its files');
     expect(findings.find((f) => f.check === 'f')!.title).toBe('Migration drops a column');
-    expect(findings.find((f) => f.check === 'g')!.title).toBe('Stripe charges an amount the browser sent');
-    expect(findings.find((f) => f.check === 'h')!.title).toBe('Anyone can run up your OpenAI bill through the summarise-weeks edge function');
-    expect(findings.find((f) => f.check === 'i' && f.severity === 'high')!.title).toBe("Auth emails go through Supabase's built-in email service, which is for testing only");
   });
 
   it('gives no review entry', () => {
@@ -230,7 +215,16 @@ describe('the fixed booking page and staff app', () => {
   });
 
   it('keeps flaw comments only in the migrations that were already applied', async () => {
-    for (const file of ['src/App.tsx', 'supabase/config.toml']) {
+    for (const file of [
+      'src/App.tsx',
+      'supabase/config.toml',
+      'src/pages/Book.tsx',
+      'src/pages/Login.tsx',
+      'src/pages/CustomerDetail.tsx',
+      'supabase/functions/create-checkout/index.ts',
+      'supabase/functions/summarise-weeks/index.ts',
+      'supabase/migrations/20261009090000_customer_photos_private.sql',
+    ]) {
       expect(await readFile(path.join(root, 'demo', file), 'utf8'), file).not.toContain('FLAW');
     }
   });

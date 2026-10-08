@@ -50,7 +50,7 @@ k. **Storage buckets.** A bucket that is public but holds private files, read fr
 
 ## 2. The sample app
 
-A small booking app (customers, appointments, staff notes) in `demo/`, hand-written in Lovable's usual stack: React, Vite, Tailwind with shadcn/ui, supabase-js, with migrations and seed data that run on the local Supabase stack in `demo/supabase/`. It carries exactly one seeded flaw per check a to k, so the before report finds every one. For check g it has a small Stripe test-mode checkout and webhook with fake keys and no Stripe account: the audit only reads that code, and no test runs the functions, and nothing ever takes a payment.
+A small booking app (customers, appointments, staff notes) in `demo/`, hand-written in Lovable's usual stack: React, Vite, Tailwind with shadcn/ui, supabase-js, with migrations and seed data that run on the local Supabase stack in `demo/supabase/`. It carries exactly one seeded flaw per check a to k, so the before report finds every one. For check g it has a small Stripe test-mode checkout and webhook with fake keys and no Stripe account: the audit only reads that code, a test runs the checkout function only in Node with Stripe faked, and nothing ever takes a payment.
 
 ## 3. The fix and the case study
 

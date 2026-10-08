@@ -36,9 +36,18 @@ additional_redirect_urls = ["http://localhost:7173/reset-password"]
 # Fixed (check e): on, so nobody can sign up with an email address they do not own.
 enable_confirmations = true
 
+[auth.email.smtp]
+# Fixed (check i): auth emails go through Resend's SMTP server, not Supabase's built-in
+# email service, which sends about 2 emails an hour and only to the project's own team.
+# The local stack uses this too, so its auth emails do not reach the mail viewer.
+enabled = true
+host = "smtp.resend.com"
+port = 465
+user = "resend"
+pass = "env(RESEND_API_KEY)"
+admin_email = "no-reply@juniperandash.example"
+sender_name = "Juniper & Ash Hair Studio"
+
 [functions.stripe-webhook]
 # Stripe sends no Supabase token; the function checks Stripe's signature instead.
-verify_jwt = false
-
-[functions.summarise-weeks]
 verify_jwt = false

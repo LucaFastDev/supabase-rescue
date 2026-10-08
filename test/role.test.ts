@@ -250,7 +250,7 @@ describe('the audit role, on the demo stack', () => {
       const asRole = (await role.query(buckets)).rows;
       expect(asRole).toEqual((await fx.sql(buckets)).rows);
       expect(asRole).toContainEqual({ id: bucket, name: bucket, public: false });
-      expect(asRole).toContainEqual({ id: 'customer-photos', name: 'customer-photos', public: true });
+      expect(asRole).toContainEqual({ id: 'customer-photos', name: 'customer-photos', public: false });
 
       const columns = async (table: string) =>
         (await fx.sql(`select column_name from information_schema.columns where table_schema = 'storage' and table_name = '${table}'`)).rows.map(
