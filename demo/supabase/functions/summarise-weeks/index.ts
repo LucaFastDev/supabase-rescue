@@ -25,6 +25,20 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Anyone can sign up, so a signed-in user is not yet staff. With the caller's own token, RLS shows
+    // them their own staff row and nothing else; no row, or a failed lookup, is refused.
+    const { data: staff, error: staffError } = await supabase
+      .from("staff")
+      .select("user_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (staffError || !staff) {
+      return new Response(JSON.stringify({ error: "Staff only" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { weeks } = await req.json();
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
