@@ -72,3 +72,7 @@ npx supabase status --workdir demo -o json   # TEST_DB_URL=<its DB_URL> into .en
 ```
 
 Each test file creates its own schemas with random names and drops them afterwards.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
