@@ -56,3 +56,7 @@ A report like the [before report](before/report.md): every problem, how serious 
 One package: **analyse and fix.** I check your app and send you the report, so you see every problem and its fix before anything changes. Then I make the fixes myself, as one change to your app, tested against it, like the sample's.
 
 **What I need from you.** Access to your project's GitHub repository, with permission to change it, or I send the changes for you to accept (if your project is not on GitHub yet, Lovable's GitHub integration puts it there). A way to apply the database changes: your own setup, or an invitation to your Supabase organization that you remove afterwards. Optionally, for the check, **a separate login** to your database with limited access: I send you a short script that creates it, you run it and choose its password, it has no direct access to the rows in your tables, it can see which of your file storage folders (buckets) are public but not the files in them, and you delete it when I am done.
+
+## Contact
+
+Questions, or want a check like this on your own Supabase project? Email luca.fastdev@gmail.com.
