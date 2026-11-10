@@ -46,7 +46,7 @@ Database security is the core of the audit: checks a to c. Checks d to k cover w
 
 **e. Auth gaps.** Email confirmation off in `config.toml`: medium. A route that renders data without an auth check: **review**, because a static read of React Router routes cannot be certain. The live project's auth settings cannot be read without the Management API, so every report lists them as **manual** checks, with where to look in the dashboard.
 
-**f. Migration not backward-compatible.** A migration that drops, renames or retypes a table or column, truncates a table, or adds a required column without a default: low, because an applied migration cannot be undone. The fix is a migration check in the app's CI, given as a snippet.
+**f. Migration not backward-compatible.** A migration that drops, renames or retypes a table or column, truncates a table, makes an existing column required (set not null), or adds a required column without a default: low, because an applied migration cannot be undone. The fix is a migration check in the app's CI, given as a snippet.
 
 **g. Payments (Stripe).** An amount passed to Stripe that comes from the request body, so the browser's price is trusted: critical. A webhook handler that does not verify Stripe's signature: critical. A Stripe test publishable key (`pk_test_`) in a production env file, which is `.env.production`, `.env.prod` or one of those with a further suffix: high. `sk_test_` secret keys belong to check d.
 
@@ -76,7 +76,7 @@ Its limits:
 - It only suggests fixes. It writes no migration files and changes nothing in the audited repo or database. Applying a fix is a separate job, done by a person as a pull request tested against the app.
 - It applies nothing to a live database, and never opens a pull request in the audited repo.
 - It does not use the service-role key or the Supabase Management API, so it cannot read dashboard settings. Those appear as manual actions.
-- It cannot see a rate limit, the project's plan, or whether a leaked key was rotated. Those appear as review entries or manual actions.
+- It cannot see a rate limit, the project's plan, or whether a leaked key was rotated. A rate limit is left to the reader: check h's high finding says to check for one before applying the fix. The plan and a key found only in the history are manual actions.
 - It has no web UI and is not published to npm.
 
 ## The sample app
