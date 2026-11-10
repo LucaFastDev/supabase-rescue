@@ -7,3 +7,4 @@ demo/supabase/.temp/
 demo/supabase/.branches/
 test-results/
 playwright-report/
+.claude/
