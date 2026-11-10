@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { CI_PATTERN, CI_SCRIPT, RULES, lintSql, migrationsCheck, splitStatements } from '../src/checks/migrations.ts';
 import { commitAll, git, gitRepo, tempDir, writeFiles } from './repo.ts';
 
-// Ported from ai-hq's scripts/check-migration.test.mjs, without the waiver and --base cases.
+// Adapted from the earlier migration checker's tests, without the waiver and --base cases.
 const blockers = (sql: string) => lintSql(sql).map((f) => f.rule.id);
 
 const BLOCKER_CASES: Record<string, string> = {

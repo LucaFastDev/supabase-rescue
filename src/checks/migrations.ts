@@ -1,5 +1,5 @@
 // Check f: a migration that is not backward-compatible. The eight blocker rules and the statement
-// splitting are ported from ai-hq's scripts/check-migration.mjs: patterns over SQL statements
+// splitting are adapted from an earlier migration checker: patterns over SQL statements
 // split on `;` with comments removed. Statements inside a dollar-quoted function body are split
 // and checked too, so a function that truncates or drops at run time is caught. The warning rules
 // and the `lane3-ok` waiver are not ported.
