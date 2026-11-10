@@ -12,14 +12,14 @@ Juniper & Ash Hair Studio is a fictional salon with the kind of app Lovable buil
 
 ## What a stranger could do
 
-| Anyone on the internet could… | How serious | What I changed |
+| Anyone on the internet could… | Severity | What I changed |
 |---|---|---|
 | Read, change or delete every staff note, including customers' allergies and payment notes. | Critical | Only signed-in staff can see or change notes. |
 | Fill the calendar with fake bookings: in the past, or already marked "confirmed" or "completed". | Critical | The form still takes bookings from anyone, but only for a future time, and only as a new booking. |
 | Type in any phone number and see that person's appointments. | Critical | "Find my booking" is gone. Customers get a booking reference that staff can look up. |
 | Copy the database's master key out of the website's code, and with it read, change or delete everything. | Critical | The key is out of the website. The Customers page now uses the staff member's own sign-in. |
 | Sign up with someone else's email address. | Medium | Email confirmation is on in the app's settings file. The same switch in the Supabase dashboard is on the to-do list below. |
-| Open the Reports page without signing in. | Needed a decision: the page might have been meant to be public | Reports are behind the staff sign-in. |
+| Open the Reports page without signing in. | Review: the page might have been meant to be public | Reports are behind the staff sign-in. |
 | Pay £1 for a £120 balayage: the checkout charged whatever price the booking page sent, and anyone can change that. | Critical | Checkout looks up the service's price itself. The booking page only says which booking is being paid for. |
 | Run up the salon's OpenAI bill by calling the Reports page's AI summary over and over, without signing in. | High | Before it calls OpenAI, the AI summary refuses anyone who is not signed in ([the launch fixes](https://github.com/LucaFastDev/supabase-rescue/pull/46)), and anyone signed in who is not on the salon's staff ([the staff-only fix](https://github.com/LucaFastDev/supabase-rescue/pull/59)). |
 | Open a customer's photo with its link. The photos looked private, since staff saw only their own, but they were in a public folder. | High | The photo folder is private. Staff see the photos through links that stop working after an hour. |
@@ -31,7 +31,7 @@ Juniper & Ash Hair Studio is a fictional salon with the kind of app Lovable buil
 Each of these has an obvious fix, and the obvious fix often breaks the app.
 
 - **Locking a table locks out your own app too.** Turn on protection for the staff notes and the notes page goes blank until the right rules exist. Getting the rules right means knowing who should see what, page by page.
-- **The standard fix for the booking form kills the booking form.** The usual advice is "only signed-in users can add bookings". That closes the hole, and no customer can book any more. My fix keeps the form open to everyone and refuses only bookings that make no sense.
+- **The standard fix for the booking form kills the booking form.** The usual advice is "only signed-in users can add bookings". That closes the hole, and no customer can book any more. The report flags exactly this under "Check before applying". My fix keeps the form open to everyone and refuses only bookings that make no sense.
 - **Deleting the master key from the code does not get rid of it.** It stays in the project's history, where anyone with a copy of the code can find it. The key has to be replaced in Supabase, and everything that uses it given the new one first.
 - **Some features cannot be made safe as they are.** "Find my booking" by phone number could not be locked down without breaking it, so it was redesigned around a booking reference.
 
@@ -39,7 +39,7 @@ The fixes came as three tested changes to the app, the way you would receive the
 
 ## After the fix
 
-The same check found nothing critical, serious or medium. Five kinds of thing are left, and none can be done from the code:
+The same check found nothing critical, high or medium. Five kinds of thing are left, and none can be done from the code:
 
 - **Replace the master key in the Supabase dashboard.** Turning off the old keys is not enough: the leaked key keeps working until the secret that signed it is revoked or replaced. Do it once every place that uses the key has been found; the report says where and in what order.
 - **Five settings in the Supabase dashboard**, such as refusing passwords known from data breaches. The check cannot see them from outside, so the report lists exactly where to click.

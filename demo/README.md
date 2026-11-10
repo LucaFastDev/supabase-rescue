@@ -2,7 +2,11 @@
 
 A small booking app for a fictional hair salon, written the way a fresh Lovable project is: React, Vite, TypeScript, Tailwind with shadcn/ui, supabase-js and React Router. The audit in the root of this repo is proven against it.
 
-**It was built deliberately insecure, then fixed.** The tag `before` carries exactly one seeded flaw for each of the audit's checks a to f, each marked in the code with a `FLAW (check x)` comment. The fix pull request repairs a to e with new migrations and code changes. The flaw comments in the migrations that were already applied stay, because an applied migration is never edited; each new migration names the flaw it fixes. Flaw f stays too: the migration that dropped `customers.notes` cannot be undone, so the fix adds a CI step that stops the next one. Check g's flaw, the checkout that trusts the booking page's price, check h's, the AI summary anyone can call, check i's, the staff password reset whose email goes through Supabase's test-only email service, and check k's, the customer photos in a public bucket whose read policy only looks private, landed on `main` with their checks, and the launch fixes pull request repairs them; check k's flaw comment stays in its migration, which was already applied. Run the app only against the local stack. Never deploy it.
+**It was built deliberately insecure, then fixed.** The git tag `before` marks the flawed app. It carries one seeded flaw for each of the audit's checks a to i and k. Each is marked in the code with a `FLAW (check x)` comment. Check j, backups and plan, is a manual check, so there is nothing to seed for it. The before report audits this version.
+
+`main` holds the fixed app. The fixes are new migrations and code changes, listed in the table below. An applied migration is never edited, so the `FLAW` comments in the old migrations (a, b, c, f and k) stay. Each new migration names the flaw it fixes. Flaw f stays too: the migration that dropped `customers.notes` cannot be undone, so the fix adds a CI step that stops the next one. That step is in `demo/.github/workflows/`, which is an example for the sample app and does not run in this repository.
+
+Run the app only against the local stack. Never deploy it.
 
 | Check | The flaw | Where | Fixed by |
 |---|---|---|---|
