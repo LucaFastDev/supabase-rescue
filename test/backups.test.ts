@@ -33,7 +33,7 @@ describe('backupsCheck', () => {
   });
 
   // Check j has no triggering and no clean fixture, because it always lists its manual action
-  // (docs/PRD.md:63): these tests check that it is listed, the same, whatever the repo holds.
+  // (docs/PRD.md, section "The checks", check j): these tests check that it is listed, the same, whatever the repo holds.
   it('lists only its manual action on an empty directory', async () => {
     const findings = await run(await tempDir());
     expect(findings).toEqual(BACKUPS_MANUAL_CHECKS);
