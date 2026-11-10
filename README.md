@@ -117,3 +117,7 @@ The before report is regenerated the same way with `--out case-study/before`, fr
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Contact
+
+Questions, or want a check like this on your own Supabase project? Email luca.fastdev@gmail.com.
